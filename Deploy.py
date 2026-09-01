@@ -61,6 +61,12 @@ NUITKA_BINARY_VERSION_OPTION = (
     f'--product-version={APPLICATION_VERSION} '
 )
 
+NUITKA_PACKAGE_DATA_OPTIONS = (
+    f'--include-package-data=Furious:Data/** '
+    f'--noinclude-data-files=Furious/Data/*.md '
+    f'--noinclude-data-files=Furious/Data/**/*.md '
+)
+
 PLATFORM_MACHINE_LOWER = PLATFORM_MACHINE.casefold()
 
 if PLATFORM == 'Windows':
@@ -90,7 +96,7 @@ if PLATFORM == 'Windows':
         f'--standalone --plugin-enable=pyside6 '
         f'--disable-console '
         f'--assume-yes-for-downloads '
-        f'--include-package-data=Furious:Data/** '
+        f'{NUITKA_PACKAGE_DATA_OPTIONS}'
         f'--nofollow-import-to=numpy '
         f'{NUITKA_BINARY_VERSION_OPTION}'
         f'--windows-icon-from-ico=\"Icons/png/rocket-takeoff-window.png\" '
@@ -108,7 +114,7 @@ elif PLATFORM == 'Darwin':
         f'--standalone --plugin-enable=pyside6 '
         f'--disable-console '
         f'--assume-yes-for-downloads '
-        f'--include-package-data=Furious:Data/** '
+        f'{NUITKA_PACKAGE_DATA_OPTIONS}'
         f'--nofollow-import-to=numpy '
         f'{NUITKA_BINARY_VERSION_OPTION}'
         f'--macos-create-app-bundle '
@@ -123,7 +129,7 @@ elif PLATFORM == 'Linux':
         f'--standalone --plugin-enable=pyside6 '
         f'--disable-console '
         f'--assume-yes-for-downloads '
-        f'--include-package-data=Furious:Data/** '
+        f'{NUITKA_PACKAGE_DATA_OPTIONS}'
         f'--nofollow-import-to=numpy '
         # The Essentials-only Linux build does not ship QtPdf, and Furious does
         # not use the optional TIFF/WebP codecs or the embedded EGLFS backend.

@@ -6,6 +6,8 @@
   MapLibre endpoint map, and the bundled font. Settings, subscriptions, caches, and temporary downloads belong elsewhere.
 - Preserve upstream licenses, provenance, binary/text formats, filenames, and paths consumed by constants, backends,
   tests, setuptools package data, and Nuitka. Do not incidentally reformat generated ACLs or replace binary assets.
+- Markdown files in this directory are repository metadata, not runtime data. Keep top-level and nested Markdown files
+  excluded consistently from setuptools package data and Nuitka inclusion while preserving them in the source tree.
 - `Deploy.py --download` performs a networked refresh and may rewrite large, time-varying assets. Run it only when that
   mutation is explicitly in scope; review source, checksums, exact changed files, and existing user modifications.
 
