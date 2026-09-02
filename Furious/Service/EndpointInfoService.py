@@ -387,9 +387,12 @@ class EndpointInfoService(QtCore.QObject):
         self._cached = False
         self._requestInFlight = False
         self._countryHint = ''
+
         self.httpClient.cancelAll()
+
         self._setState(EndpointInfoState.Loading)
         self._publishResult(EndpointInfo())
+
         self._startLookup()
 
     def requestIfNeeded(self):

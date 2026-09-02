@@ -831,12 +831,14 @@ class ProfileTestServiceTest(unittest.TestCase):
 
         activeLatency.finish('stale')
         processQtEvents()
+
         self.assertEqual(retained.metadata.latency, '')
         self.assertEqual(len(pool.started), 2)
 
         otherLatency = pool.started[1]
         otherLatency.finish('9ms')
         processQtEvents()
+
         otherDownload = next(
             worker
             for worker in _ControlledDownloadWorker.instances

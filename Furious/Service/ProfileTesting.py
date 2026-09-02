@@ -583,6 +583,7 @@ class _LatencyScheduler(QtCore.QObject):
         self.discardTcpingJobs(
             lambda job: job.target.subscriptionSource in subscriptionIds
         )
+
         self.scheduleDrain()
 
     def discardTcpingJobs(self, predicate):
@@ -1391,6 +1392,7 @@ class ProfileTestManager(QtCore.QObject):
     def reconcileProfiles(self):
         """Refresh current identity once and proactively invalidate stale work."""
         self._targets = _currentTargets(self._profilesProvider())
+
         self._latencyScheduler.reconcileProfiles()
         self._serialDownloadScheduler.reconcileProfiles()
         self._concurrentDownloadScheduler.reconcileProfiles()
@@ -1419,6 +1421,7 @@ class ProfileTestManager(QtCore.QObject):
             return
 
         self._shuttingDown = True
+
         self._latencyScheduler.shutdown()
         self._serialDownloadScheduler.cancelAll()
         self._concurrentDownloadScheduler.cancelAll()

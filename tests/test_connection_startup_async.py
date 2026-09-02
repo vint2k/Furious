@@ -583,6 +583,7 @@ class ConnectionStartupAsyncTest(TestCase):
                 'Global',
                 deepcopy=False,
             )
+
             succeeded = []
             operation.succeeded.connect(succeeded.append)
 

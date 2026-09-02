@@ -1073,6 +1073,7 @@ class SubscriptionManagerTest(TestCase):
             self.assertTrue(started.wait(2))
 
             handled = []
+
             QtCore.QTimer.singleShot(0, lambda: handled.append(True))
             processQtEvents(1)
 

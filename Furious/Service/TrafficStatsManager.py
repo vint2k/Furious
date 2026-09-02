@@ -347,10 +347,13 @@ class TrafficStatsManager(
         """Stop statistics work without changing the connection lifecycle."""
         self._sampleTimer.stop()
         self._generation += 1
+
         self._cancelCurrentQuery()
         self._monitor = None
+
         self._resetSamples()
         self._beginConnectionUsage()
+
         self.statisticsUnavailable.emit()
 
     @QtCore.Slot(bool)
@@ -514,10 +517,13 @@ class TrafficStatsManager(
         self._connected = False
         self._sampleTimer.stop()
         self._generation += 1
+
         self._cancelCurrentQuery()
         self._monitor = None
+
         self._resetSamples()
         self._beginConnectionUsage()
+
         self.statisticsUnavailable.emit()
 
     def cleanup(self):

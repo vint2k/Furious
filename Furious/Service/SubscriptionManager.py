@@ -552,7 +552,6 @@ class SubscriptionManager(HttpGetManager):
         jobId = getattr(outcome, 'jobId', -1)
 
         self._preparationJobs.pop(jobId, None)
-
         fallbackPayload = self._preparationPayloads.pop(jobId, None)
         context = getattr(outcome, 'context', {})
 
@@ -1089,7 +1088,6 @@ class SubscriptionManager(HttpGetManager):
         operations = []
 
         self._nextBatchId += 1
-
         batchId = self._nextBatchId
 
         for unique, subscription in batch:

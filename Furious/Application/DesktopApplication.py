@@ -1013,7 +1013,6 @@ class DesktopApplication(ApplicationRunner, SingletonApplication):
                 return ApplicationRunner.ExitCode.ExitSuccess.value
 
             pluginRegistry = self.addEnviron()
-
             self._cleanupStack.register('plugins', pluginRegistry.shutdown)
 
             try:
@@ -1029,6 +1028,7 @@ class DesktopApplication(ApplicationRunner, SingletonApplication):
             self._cleanupStack.register(
                 'mixin-owned resources', Mixins.CleanupOnExit.cleanupAll
             )
+
             self._initializeControllers()
             self._cleanupStack.register('controllers', self._cleanupControllers)
 
@@ -1041,6 +1041,7 @@ class DesktopApplication(ApplicationRunner, SingletonApplication):
             self._cleanupStack.register('theme detection', self._stopThemeDetection)
 
             self.aboutToQuit.connect(self.cleanup)
+
             self._initializeSystemIntegration()
 
             self._initializeUI()
