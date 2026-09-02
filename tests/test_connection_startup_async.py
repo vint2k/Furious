@@ -19,8 +19,8 @@
 
 from __future__ import annotations
 
-from Furious.Interface import CoreRuntime
-from Furious.Plugins import CoreRuntimeLaunch, CoreRuntimeStartup
+from Furious.Interface import CoreRuntime, RuntimeState
+from Furious.Plugins import PreparedRuntime, CoreRuntimeStartup
 from Furious.Qt.Signals import singleShotWeakly
 from Furious.Service.ConnectionManager import (
     ConnectionManager,
@@ -65,7 +65,6 @@ class _Runtime(CoreRuntime):
         self.startOptions = []
         self.stopCount = 0
         self.disposeCount = 0
-        self.confirmCount = 0
 
     @staticmethod
     def name():
@@ -81,6 +80,7 @@ class _Runtime(CoreRuntime):
         """Become live and retain launch options."""
         self.startOptions.append(dict(kwargs))
         self.alive = True
+        self.setState(RuntimeState.Alive)
 
         return True
 
@@ -88,29 +88,24 @@ class _Runtime(CoreRuntime):
         """Stop this exact runtime."""
         self.stopCount += 1
         self.alive = False
+        self.setState(RuntimeState.Exited)
 
     def dispose(self):
         """Record final resource disposal."""
         self.disposeCount += 1
         self._exitCallback = None
 
-    def isAlive(self):
+    def isRunning(self):
         """Return the controlled process-survival state."""
         return self.alive
 
-    def confirmStartup(self):
-        """Record readiness confirmation."""
-        if not self.alive:
-            return False
-
-        self.confirmCount += 1
-
-        return True
-
-    def fail(self, exitcode=61):
-        """Simulate an early child-process exit."""
+    def fail(self, exitcode=61, *, report=True):
+        """Simulate an early child exit through the runtime event authority."""
         self.alive = False
-        self.callExitCallback(exitcode)
+        self.setState(RuntimeState.Failed)
+
+        if report:
+            self.publishExit(self.interpretExit(exitcode))
 
 
 class _Registry:
@@ -122,7 +117,10 @@ class _Registry:
 
     def createCoreRuntime(self, *_args, **_kwargs):
         """Return the next prepared runtime launch."""
-        return self.launches.pop(0)
+        launch = self.launches.pop(0)
+        launch.runtime.bindExitCallback(_kwargs.get('exitCallback'))
+
+        return launch
 
 
 class _ResolverFixture(QtCore.QObject):
@@ -219,10 +217,9 @@ class ConnectionStartupAsyncTest(TestCase):
         server = self._server()
         endpoint = f'127.0.0.1:{server.serverPort()}'
         runtime = _Runtime()
-        launch = CoreRuntimeLaunch(
+        launch = PreparedRuntime(
             runtime,
-            _Configuration(),
-            startup=CoreRuntimeStartup(endpoint=endpoint, timeout=1500),
+            readiness=CoreRuntimeStartup(endpoint=endpoint, timeout=1500),
         )
         manager = self._manager()
         operation = self._operation(manager, launch)
@@ -235,8 +232,7 @@ class ConnectionStartupAsyncTest(TestCase):
         self.assertTrue(waitFor(lambda: bool(succeeded), timeout=0.5))
         self.assertEqual(timerEvents, [True])
         self.assertEqual(manager.runtimes, [runtime])
-        self.assertEqual(runtime.confirmCount, 1)
-        self.assertFalse(runtime.startOptions[0]['waitCore'])
+        self.assertEqual(runtime.startOptions[0], {})
 
     def testReadinessTimeoutRollsBackTheExactRuntime(self):
         """Fail a live process whose promised local endpoint never appears."""
@@ -247,10 +243,9 @@ class ConnectionStartupAsyncTest(TestCase):
         manager = self._manager()
         operation = self._operation(
             manager,
-            CoreRuntimeLaunch(
+            PreparedRuntime(
                 runtime,
-                _Configuration(),
-                startup=CoreRuntimeStartup(
+                readiness=CoreRuntimeStartup(
                     endpoint=f'127.0.0.1:{port}',
                     timeout=60,
                     retryInterval=5,
@@ -261,7 +256,80 @@ class ConnectionStartupAsyncTest(TestCase):
         operation.failed.connect(lambda *_args: failures.append(_args))
 
         self.assertTrue(waitFor(lambda: bool(failures)))
+        self.assertEqual(failures[0][1], 'Failed to start core')
+        self.assertEqual(failures[0][2], 'core readiness check timed out')
+        self.assertEqual(manager.lastStartError, 'Failed to start core')
         self.assertEqual(manager.runtimes, [])
+        self.assertEqual(runtime.stopCount, 1)
+        self.assertEqual(runtime.disposeCount, 1)
+
+    def testObservedConfigurationExitPreservesSemanticFailure(self):
+        """Let the runtime's typed exit remain the sole terminal authority."""
+        runtime = _Runtime()
+        manager = self._manager()
+        operation = self._operation(
+            manager,
+            PreparedRuntime(
+                runtime,
+                readiness=CoreRuntimeStartup(
+                    endpoint='127.0.0.1:1',
+                    timeout=500,
+                    retryInterval=5,
+                ),
+            ),
+        )
+        failures = []
+        operation.failed.connect(lambda *_args: failures.append(_args))
+
+        processQtEvents()
+        runtime.fail(CoreRuntime.ExitCode.ConfigurationError.value)
+
+        self.assertTrue(waitFor(lambda: bool(failures)))
+        processQtEvents(5)
+        self.assertEqual(len(failures), 1)
+        self.assertIs(failures[0][0], operation)
+        self.assertEqual(failures[0][1], 'Invalid server configuration')
+        self.assertEqual(
+            failures[0][2],
+            'Async Fixture exited during waiting-primary with code 23; '
+            'reason=invalid-configuration',
+        )
+        self.assertEqual(manager.lastStartError, 'Invalid server configuration')
+        self.assertEqual(runtime.stopCount, 1)
+        self.assertEqual(runtime.disposeCount, 1)
+
+    def testQueuedConfigurationExitOutranksReadinessTimeout(self):
+        """Preserve code 23 when timeout delivery races a queued runtime event."""
+        runtime = _Runtime()
+        manager = self._manager()
+        operation = self._operation(
+            manager,
+            PreparedRuntime(
+                runtime,
+                readiness=CoreRuntimeStartup(
+                    endpoint='127.0.0.1:1',
+                    timeout=500,
+                    retryInterval=5,
+                ),
+            ),
+        )
+        failures = []
+        operation.failed.connect(lambda *_args: failures.append(_args))
+
+        processQtEvents()
+        runtime.fail(CoreRuntime.ExitCode.ConfigurationError.value)
+        operation._readinessProbe._finishFailed('core readiness check timed out')
+
+        self.assertTrue(waitFor(lambda: bool(failures)))
+        processQtEvents(5)
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0][1], 'Invalid server configuration')
+        self.assertEqual(
+            failures[0][2],
+            'Async Fixture exited during waiting-primary with code 23; '
+            'reason=invalid-configuration',
+        )
+        self.assertEqual(manager.lastStartError, 'Invalid server configuration')
         self.assertEqual(runtime.stopCount, 1)
         self.assertEqual(runtime.disposeCount, 1)
 
@@ -271,10 +339,9 @@ class ConnectionStartupAsyncTest(TestCase):
         manager = self._manager()
         operation = self._operation(
             manager,
-            CoreRuntimeLaunch(
+            PreparedRuntime(
                 runtime,
-                _Configuration(),
-                startup=CoreRuntimeStartup(
+                readiness=CoreRuntimeStartup(
                     endpoint='127.0.0.1:1',
                     timeout=500,
                 ),
@@ -289,6 +356,12 @@ class ConnectionStartupAsyncTest(TestCase):
         self.assertTrue(waitFor(lambda: bool(failures)))
         processQtEvents(5)
         self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0][1], 'Core terminated unexpectedly')
+        self.assertEqual(
+            failures[0][2],
+            'Async Fixture exited during waiting-primary with code 61; '
+            'reason=unexpected',
+        )
         self.assertEqual(runtime.stopCount, 1)
         self.assertEqual(runtime.disposeCount, 1)
 
@@ -300,18 +373,16 @@ class ConnectionStartupAsyncTest(TestCase):
         manager = self._manager()
         registry = _Registry(
             [
-                CoreRuntimeLaunch(
+                PreparedRuntime(
                     first,
-                    _Configuration(),
-                    startup=CoreRuntimeStartup(
+                    readiness=CoreRuntimeStartup(
                         endpoint='127.0.0.1:1',
                         timeout=5000,
                     ),
                 ),
-                CoreRuntimeLaunch(
+                PreparedRuntime(
                     second,
-                    _Configuration(),
-                    startup=CoreRuntimeStartup(
+                    readiness=CoreRuntimeStartup(
                         endpoint=f'127.0.0.1:{server.serverPort()}',
                         timeout=500,
                     ),
@@ -347,20 +418,19 @@ class ConnectionStartupAsyncTest(TestCase):
         self.assertEqual(first.disposeCount, 1)
         self.assertEqual(manager.runtimes, [second])
 
-    def testLegacyLaunchRetainsSynchronousStartOptions(self):
-        """Do not inject waitCore into a plugin without async capability."""
+    def testPreparedLaunchWithoutReadinessStartsAndCommitsDirectly(self):
+        """Start a runtime without inventing an endpoint-readiness policy."""
         runtime = _Runtime()
         manager = self._manager()
         operation = self._operation(
             manager,
-            CoreRuntimeLaunch(runtime, _Configuration()),
+            PreparedRuntime(runtime),
         )
         succeeded = []
         operation.succeeded.connect(succeeded.append)
 
         self.assertTrue(waitFor(lambda: bool(succeeded)))
         self.assertEqual(runtime.startOptions, [{}])
-        self.assertEqual(runtime.confirmCount, 0)
         self.assertEqual(manager.runtimes, [runtime])
 
     def testDnsResolutionOperationCompletesAndCancelsWithoutNestedWait(self):
@@ -408,8 +478,8 @@ class ConnectionStartupAsyncTest(TestCase):
         events = []
         deviceChecks = 0
 
-        def tunFactory(**kwargs):
-            tun.setExitCallback(kwargs.get('exitCallback'))
+        def tunFactory(*_args, **kwargs):
+            tun.bindExitCallback(kwargs.get('exitCallback'))
 
             return tun
 
@@ -440,10 +510,9 @@ class ConnectionStartupAsyncTest(TestCase):
         self.managers.append(manager)
         registry = _Registry(
             [
-                CoreRuntimeLaunch(
+                PreparedRuntime(
                     primary,
-                    _Configuration(),
-                    startup=CoreRuntimeStartup(
+                    readiness=CoreRuntimeStartup(
                         endpoint=f'127.0.0.1:{server.serverPort()}',
                         timeout=500,
                     ),
@@ -524,7 +593,7 @@ class ConnectionStartupAsyncTest(TestCase):
             ['find-device', 'script', 'find-device', 'tun-start'],
         )
         self.assertEqual(manager.runtimes, [primary, tun])
-        self.assertFalse(tun.startOptions[0]['waitCore'])
+        self.assertEqual(tun.startOptions[0], {})
 
     def testWindowsTunStartsRuntimeBeforeObservingAndMutatingDevice(self):
         """Keep the Windows launch, device, then host-mutation sequence."""
@@ -535,8 +604,8 @@ class ConnectionStartupAsyncTest(TestCase):
         tun.cleanup = None
         events = []
 
-        def tunFactory(**kwargs):
-            tun.setExitCallback(kwargs.get('exitCallback'))
+        def tunFactory(*_args, **kwargs):
+            tun.bindExitCallback(kwargs.get('exitCallback'))
 
             return tun
 
@@ -562,10 +631,9 @@ class ConnectionStartupAsyncTest(TestCase):
         self.managers.append(manager)
         registry = _Registry(
             [
-                CoreRuntimeLaunch(
+                PreparedRuntime(
                     primary,
-                    _Configuration(),
-                    startup=CoreRuntimeStartup(
+                    readiness=CoreRuntimeStartup(
                         endpoint=f'127.0.0.1:{server.serverPort()}',
                         timeout=500,
                     ),
@@ -657,8 +725,8 @@ class ConnectionStartupAsyncTest(TestCase):
         tun.cleanup = None
         events = []
 
-        def tunFactory(**kwargs):
-            tun.setExitCallback(kwargs.get('exitCallback'))
+        def tunFactory(*_args, **kwargs):
+            tun.bindExitCallback(kwargs.get('exitCallback'))
 
             return tun
 
@@ -681,10 +749,9 @@ class ConnectionStartupAsyncTest(TestCase):
         self.managers.append(manager)
         registry = _Registry(
             [
-                CoreRuntimeLaunch(
+                PreparedRuntime(
                     primary,
-                    _Configuration(),
-                    startup=CoreRuntimeStartup(
+                    readiness=CoreRuntimeStartup(
                         endpoint=f'127.0.0.1:{server.serverPort()}',
                         timeout=500,
                     ),
@@ -764,10 +831,9 @@ class ConnectionStartupAsyncTest(TestCase):
             runtime = _Runtime()
             operation = self._operation(
                 manager,
-                CoreRuntimeLaunch(
+                PreparedRuntime(
                     runtime,
-                    _Configuration(),
-                    startup=CoreRuntimeStartup(
+                    readiness=CoreRuntimeStartup(
                         endpoint='127.0.0.1:1',
                         timeout=5000,
                     ),

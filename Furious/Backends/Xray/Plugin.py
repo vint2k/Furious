@@ -23,6 +23,7 @@ from Furious.Frozenlib import *
 from Furious.Core import *
 from Furious.Repository import *
 from Furious.Plugins.API import *
+from Furious.Plugins.Runtime import serializeRuntimeConfiguration
 from Furious.Backends.Configuration import *
 
 from .Process import *
@@ -322,16 +323,15 @@ class XrayCoreRuntimeFactory(CoreRuntimeFactory):
                 statsTarget = None
 
         runtime = XrayCore(
+            serializeRuntimeConfiguration(config, XrayCore.name()),
             exitCallback=request.exitCallback,
             msgCallback=request.messageCallback,
         )
         runtime.xrayStatsTarget = statsTarget
 
-        return CoreRuntimeLaunch(
+        return PreparedRuntime(
             runtime,
-            config,
-            options=request.options,
-            startup=CoreRuntimeStartup(endpoint=config.httpProxy()),
+            readiness=CoreRuntimeStartup(endpoint=config.httpProxy()),
         )
 
     def prepareDownloadTest(self, config, port: int):

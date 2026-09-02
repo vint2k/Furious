@@ -29,6 +29,7 @@ from Furious.Interface import ApplicationRunner, CoreRuntime
 from Furious.Qt import AppQMessageBox
 from Furious.Qt.AppStyleSheet import AppStyleSheet
 from Furious.Service.ConnectionManager import ConnectionManager
+from Furious.Service.RuntimeLease import RuntimeEventRouter, RuntimeLease
 
 from PySide6 import QtCore
 from PySide6.QtNetwork import QLocalServer
@@ -45,7 +46,10 @@ import subprocess
 import time
 import uuid
 
-CoreProcessWorkerModule = importlib.import_module('Furious.Core.CoreProcessWorker')
+ProcessOutputModule = importlib.import_module('Furious.Core.ProcessOutput')
+MultiprocessingRuntimeModule = importlib.import_module(
+    'Furious.Core.MultiprocessingRuntime'
+)
 
 
 class _Runtime(CoreRuntime):
@@ -74,7 +78,7 @@ class _Runtime(CoreRuntime):
     def dispose(self):
         self.disposeCount += 1
 
-    def isAlive(self) -> bool:
+    def isRunning(self) -> bool:
         return self.stopCount == 0
 
 
@@ -247,37 +251,14 @@ class ApplicationLifecycleTransactionTest(TestCase):
     def testInvalidCoreLaunchDiagnosticsDoNotRenderPayloads(self):
         """Describe invalid launch types without rendering secret arguments."""
         secret = 'password=do-not-log-this'
-        runtime = SimpleNamespace(
-            name=mock.Mock(return_value='Probe'),
-            setState=mock.Mock(),
-        )
 
-        class SecretLaunch:
-            def __repr__(self):
-                return secret
-
-        with self.assertLogs('Furious.Core.CoreProcessWorker', level='ERROR') as logs:
-            self.assertFalse(
-                CoreProcessWorkerModule.CoreProcessWorker.startWithSpec(
-                    runtime,
-                    SecretLaunch(),
-                )
-            )
-            self.assertFalse(
-                CoreProcessWorkerModule.CoreProcessWorker.startWithSpec(
-                    runtime,
-                    CoreProcessWorkerModule.CoreLaunchSpec(
-                        target=secret,
-                        args=(secret,),
-                    ),
-                )
+        with self.assertRaises(TypeError) as raised:
+            MultiprocessingRuntimeModule.ProcessLaunchSpec(
+                target=secret,
+                args=(secret,),
             )
 
-        output = '\n'.join(logs.output)
-
-        self.assertIn('SecretLaunch', output)
-        self.assertIn('str', output)
-        self.assertNotIn(secret, output)
+        self.assertNotIn(secret, str(raised.exception))
 
     def testRejectedServerProfileDiagnosticsDoNotRenderInput(self):
         """Reject an invalid profile without logging its complete configuration."""
@@ -1216,25 +1197,25 @@ class ApplicationLifecycleTransactionTest(TestCase):
 
             with (
                 mock.patch.object(
-                    CoreProcessWorkerModule.SystemRuntime,
+                    ProcessOutputModule.SystemRuntime,
                     'isPythonw',
                     return_value=False,
                 ),
                 mock.patch.object(
-                    CoreProcessWorkerModule.ProcessOutputRedirector,
+                    ProcessOutputModule.ProcessOutputRedirector,
                     'TemporaryDir',
                     _TemporaryDir(directory),
                 ),
-                mock.patch.object(CoreProcessWorkerModule, 'sys', fakeSys),
-                mock.patch.object(CoreProcessWorkerModule.os, 'dup2'),
+                mock.patch.object(ProcessOutputModule, 'sys', fakeSys),
+                mock.patch.object(ProcessOutputModule.os, 'dup2'),
                 mock.patch.object(
-                    CoreProcessWorkerModule.threading,
+                    ProcessOutputModule.threading,
                     'Thread',
                     return_value=thread,
                 ),
-                mock.patch.object(CoreProcessWorkerModule.time, 'sleep') as sleep,
+                mock.patch.object(ProcessOutputModule.time, 'sleep') as sleep,
             ):
-                CoreProcessWorkerModule.ProcessOutputRedirector.launch(
+                ProcessOutputModule.ProcessOutputRedirector.launch(
                     mock.Mock(), entrypoint, True
                 )
 
@@ -1245,14 +1226,14 @@ class ApplicationLifecycleTransactionTest(TestCase):
     def testCoreLogQueueIsBoundedAndTruncatesBeforeTransport(self):
         """Drop excess burst output instead of retaining an unbounded backlog."""
         received = []
-        messageQueue = CoreProcessWorkerModule.MsgQueue(
+        messageQueue = ProcessOutputModule.MsgQueue(
             msgCallback=received.append,
             maximumPendingMessages=4,
         )
 
         try:
             oversized = 'x' * (
-                CoreProcessWorkerModule.MsgQueue.MAXIMUM_MESSAGE_CHARACTERS + 100
+                ProcessOutputModule.MsgQueue.MAXIMUM_MESSAGE_CHARACTERS + 100
             )
             accepted = [
                 messageQueue.putMessage(oversized if index == 0 else str(index))
@@ -1270,15 +1251,16 @@ class ApplicationLifecycleTransactionTest(TestCase):
             self.assertTrue(received)
             self.assertLessEqual(
                 len(received[0]),
-                CoreProcessWorkerModule.MsgQueue.MAXIMUM_MESSAGE_CHARACTERS,
+                ProcessOutputModule.MsgQueue.MAXIMUM_MESSAGE_CHARACTERS,
             )
         finally:
             messageQueue.dispose()
+            self.assertIsNone(messageQueue._timerConnection)
 
     def testCoreLogQueueBacksOffWhileIdleAndRecoversOnActivity(self):
         """Poll rapidly during output and progressively less often while idle."""
         received = []
-        messageQueue = CoreProcessWorkerModule.MsgQueue(msgCallback=received.append)
+        messageQueue = ProcessOutputModule.MsgQueue(msgCallback=received.append)
 
         try:
             messageQueue.getNoWait = mock.Mock(return_value='')
@@ -1296,14 +1278,15 @@ class ApplicationLifecycleTransactionTest(TestCase):
             self.assertEqual(received, ['message'])
             self.assertEqual(
                 messageQueue.getTimeout(),
-                CoreProcessWorkerModule.MsgQueue.ACTIVE_DRAIN_INTERVAL,
+                ProcessOutputModule.MsgQueue.ACTIVE_DRAIN_INTERVAL,
             )
             self.assertEqual(
                 messageQueue.timer.interval(),
-                CoreProcessWorkerModule.MsgQueue.ACTIVE_DRAIN_INTERVAL,
+                ProcessOutputModule.MsgQueue.ACTIVE_DRAIN_INTERVAL,
             )
         finally:
             messageQueue.dispose()
+            self.assertIsNone(messageQueue._timerConnection)
 
     def testCoreLogQueueUsesOneNaturalBatchWhenCallbackSupportsIt(self):
         """Drain one queue turn through one batch-capable callback invocation."""
@@ -1322,7 +1305,7 @@ class ApplicationLifecycleTransactionTest(TestCase):
                 self.batches.append(tuple(messages))
 
         callback = BatchCallback()
-        messageQueue = CoreProcessWorkerModule.MsgQueue(msgCallback=callback)
+        messageQueue = ProcessOutputModule.MsgQueue(msgCallback=callback)
 
         try:
             messageQueue.getNoWait = mock.Mock(
@@ -1334,10 +1317,11 @@ class ApplicationLifecycleTransactionTest(TestCase):
             self.assertEqual(callback.batches, [('first', 'second', 'third')])
             self.assertEqual(
                 messageQueue.getTimeout(),
-                CoreProcessWorkerModule.MsgQueue.ACTIVE_DRAIN_INTERVAL,
+                ProcessOutputModule.MsgQueue.ACTIVE_DRAIN_INTERVAL,
             )
         finally:
             messageQueue.dispose()
+            self.assertIsNone(messageQueue._timerConnection)
 
     def testFailuresAtMeaningfulStagesRollBackOnlyEarlierStages(self):
         expected = {
@@ -1471,6 +1455,16 @@ class ApplicationLifecycleTransactionTest(TestCase):
 class ConnectionStartupTransactionTest(TestCase):
     """Verify one failed attempt releases only its own exact runtimes."""
 
+    @staticmethod
+    def _commitExistingRuntime(manager, runtime):
+        """Give one fixture runtime to the manager through the real lease boundary."""
+        router = RuntimeEventRouter()
+        runtime.bindExitCallback(router.publish)
+        router.attach(runtime, manager)
+        lease = RuntimeLease(runtime, router)
+        lease.commit(None)
+        manager._leases.append(lease)
+
     def testDnsResolverIsAcquiredLazilyAndReleasedByTheManager(self):
         """Avoid constructing a Qt network manager before QApplication exists."""
         resolver = mock.Mock()
@@ -1515,7 +1509,7 @@ class ConnectionStartupTransactionTest(TestCase):
         manager = ConnectionManager()
         existing = _Runtime()
         failed = _Runtime()
-        manager.runtimes.append(existing)
+        self._commitExistingRuntime(manager, existing)
 
         self.assertFalse(self._start(manager, failed, success=False))
         self.assertEqual(manager.runtimes, [existing])
@@ -1569,7 +1563,7 @@ class ConnectionStartupTransactionTest(TestCase):
         manager = ConnectionManager()
         existing = _Runtime()
         primary = _Runtime()
-        manager.runtimes.append(existing)
+        self._commitExistingRuntime(manager, existing)
         observedOwnership = []
 
         def startApplicationTun2socks(attempt, *args):

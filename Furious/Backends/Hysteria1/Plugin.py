@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from Furious.Frozenlib import *
 from Furious.Plugins.API import *
+from Furious.Plugins.Runtime import serializeRuntimeConfiguration
 from Furious.Backends.Configuration import *
 
 from .Process import *
@@ -82,19 +83,16 @@ class Hysteria1CoreRuntimeFactory(CoreRuntimeFactory):
             logger.info(f'RoutingObject: {routingObject}')
 
         runtime = Hysteria1(
+            serializeRuntimeConfiguration(config, Hysteria1.name()),
+            Hysteria1.rule(routingObject.get('rule', '')),
+            Hysteria1.mmdb(routingObject.get('mmdb', '')),
             exitCallback=request.exitCallback,
             msgCallback=request.messageCallback,
         )
 
-        return CoreRuntimeLaunch(
+        return PreparedRuntime(
             runtime,
-            config,
-            arguments=(
-                Hysteria1.rule(routingObject.get('rule', '')),
-                Hysteria1.mmdb(routingObject.get('mmdb', '')),
-            ),
-            options=request.options,
-            startup=CoreRuntimeStartup(endpoint=config.httpProxy()),
+            readiness=CoreRuntimeStartup(endpoint=config.httpProxy()),
         )
 
     def prepareDownloadTest(self, config, port: int):
@@ -112,13 +110,6 @@ class Hysteria1CoreRuntimeFactory(CoreRuntimeFactory):
     def coreVersions(self):
         """Return the bundled Hysteria 1 version."""
         return (Hysteria1.version(),)
-
-    def coreExitMessage(self, core, exitcode: int):
-        """Interpret the Hysteria 1 remote-network exit code."""
-        if exitcode == Hysteria1.ExitCode.RemoteNetworkError.value:
-            return 'Connection to server has been lost'
-
-        return None
 
 
 class Hysteria1Plugin(FuriousPlugin):

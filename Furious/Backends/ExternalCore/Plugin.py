@@ -22,8 +22,9 @@ from __future__ import annotations
 from Furious.Plugins.API import (
     FuriousPlugin,
     CoreRuntimeFactory,
-    CoreRuntimeLaunch,
     CoreRuntimeRequest,
+    CoreRuntimeStartup,
+    PreparedRuntime,
     PluginMetadata,
 )
 
@@ -53,6 +54,7 @@ class ExternalCoreRuntimeFactory(CoreRuntimeFactory):
     def create(self, request: CoreRuntimeRequest):
         """Create an External Core process launch for the connection manager."""
         runtime = ExternalCoreProcess(
+            request.configuration,
             exitCallback=request.exitCallback,
             msgCallback=request.messageCallback,
         )
@@ -72,15 +74,10 @@ class ExternalCoreRuntimeFactory(CoreRuntimeFactory):
                     'application-managed TUN will be skipped'
                 )
 
-        return CoreRuntimeLaunch(
+        return PreparedRuntime(
             runtime,
-            request.configuration,
-            options=request.options,
+            readiness=CoreRuntimeStartup(endpoint=request.configuration.httpProxy()),
         )
-
-    def coreExitMessage(self, core, exitcode: int):
-        """Describe an external program that exited after successful startup."""
-        return 'External core exited unexpectedly'
 
 
 class ExternalCorePlugin(FuriousPlugin):

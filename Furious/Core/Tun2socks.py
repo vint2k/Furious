@@ -20,7 +20,11 @@
 from __future__ import annotations
 
 from Furious.Frozenlib import *
-from Furious.Core.CoreProcessWorker import *
+from Furious.Core import (
+    MultiprocessingRuntime,
+    ProcessLaunchSpec,
+    ProcessOutputRedirector,
+)
 
 import time
 import functools
@@ -50,7 +54,7 @@ def startTun2socks(msgQueue: multiprocessing.Queue, *args):
         )
 
 
-class Tun2socks(CoreProcessWorker):
+class Tun2socks(MultiprocessingRuntime):
     """Manage the tun2socks subprocess used by TUN mode."""
 
     class ExitCode:
@@ -58,9 +62,37 @@ class Tun2socks(CoreProcessWorker):
         """Enumerate process exit codes."""
         SystemShuttingDown = 0x40010004
 
-    def __init__(self, **kwargs):
-        """Initialize the Tun2socks."""
-        super().__init__(**kwargs)
+    def __init__(
+        self,
+        device: str,
+        networkInterface: str,
+        logLevel: str,
+        proxy: str,
+        restAPI: str,
+        tcpSendBufferSize: str = '',
+        tcpReceiveBufferSize: str = '',
+        tcpAutoTuning: bool = False,
+        **kwargs,
+    ):
+        """Initialize a fully prepared tun2socks execution runtime."""
+        super().__init__(
+            lambda output: ProcessLaunchSpec(
+                target=startTun2socks,
+                args=(
+                    output,
+                    device,
+                    networkInterface,
+                    logLevel,
+                    proxy,
+                    restAPI,
+                    tcpSendBufferSize,
+                    tcpReceiveBufferSize,
+                    tcpAutoTuning,
+                ),
+                processOptions=kwargs.pop('processOptions', {}),
+            ),
+            **kwargs,
+        )
 
         self.cleanup = None
 
@@ -80,62 +112,6 @@ class Tun2socks(CoreProcessWorker):
             # Any non-exit exceptions
 
             return '0.0.0'
-
-    def launchSpec(
-        self,
-        device: str,
-        networkInterface: str,
-        logLevel: str,
-        proxy: str,
-        restAPI: str,
-        tcpSendBufferSize: str = '',
-        tcpReceiveBufferSize: str = '',
-        tcpAutoTuning: bool = False,
-        **kwargs,
-    ) -> CoreLaunchSpec:
-        """Build the child-process launch specification."""
-        return CoreLaunchSpec(
-            target=startTun2socks,
-            args=(
-                self.msgQueue,
-                device,
-                networkInterface,
-                logLevel,
-                proxy,
-                restAPI,
-                tcpSendBufferSize,
-                tcpReceiveBufferSize,
-                tcpAutoTuning,
-            ),
-            processKwargs=kwargs,
-        )
-
-    def start(
-        self,
-        device: str,
-        networkInterface: str,
-        logLevel: str,
-        proxy: str,
-        restAPI: str,
-        tcpSendBufferSize: str = '',
-        tcpReceiveBufferSize: str = '',
-        tcpAutoTuning: bool = False,
-        **kwargs,
-    ) -> bool:
-        """Start the tun2socks."""
-        launchSpec = self.launchSpec(
-            device,
-            networkInterface,
-            logLevel,
-            proxy,
-            restAPI,
-            tcpSendBufferSize,
-            tcpReceiveBufferSize,
-            tcpAutoTuning,
-            **kwargs,
-        )
-
-        return self.startWithSpec(launchSpec)
 
     def stop(self):
         """Stop the tun2socks."""

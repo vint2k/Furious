@@ -21,7 +21,9 @@ from __future__ import annotations
 
 from Furious.Backends.Configuration import ConfigXray
 from Furious.Frozenlib import AppSettings, OS_CPU_COUNT
+from Furious.Interface import CoreRuntime, RuntimeExit, RuntimeExitReason, RuntimeState
 from Furious.Models import ServerProfile
+from Furious.Plugins import PreparedRuntime
 from Furious.Repository import Storage
 from Furious.Service.ProfileTesting import (
     DownloadSpeedTestOptions,
@@ -190,6 +192,28 @@ class _ImmediateCoreManager(_CoreManagerProbe):
         return True
 
 
+class _ImmediateRuntime(CoreRuntime):
+    """Provide an execution-only runtime for download admission tests."""
+
+    @staticmethod
+    def name():
+        """Return the fixture name."""
+        return 'Immediate runtime'
+
+    @staticmethod
+    def version():
+        """Return the fixture version."""
+        return '1'
+
+    def start(self):
+        """Become alive immediately."""
+        self.setState(RuntimeState.Alive)
+
+    def stop(self):
+        """Stop without external side effects."""
+        self.setState(RuntimeState.Exited)
+
+
 class _CancelDuringStartDownloadWorker(_DownloadSpeedWorker):
     """Re-enter subscription invalidation while a worker is starting."""
 
@@ -315,7 +339,6 @@ class ProfileTestServiceTest(unittest.TestCase):
             """Create a real worker around an immediate fake core runtime."""
             worker = _DownloadSpeedWorker(*args, **kwargs)
             worker.CoreStartupGraceMilliseconds = 60_000
-            worker.coreManager = _ImmediateCoreManager()
             workers.append(worker)
 
             return worker
@@ -323,6 +346,11 @@ class ProfileTestServiceTest(unittest.TestCase):
         scheduler.workerFactory = workerFactory
         registry = mock.Mock()
         registry.prepareDownloadTest.side_effect = lambda profile, _port: profile
+        registry.createCoreRuntime.side_effect = (
+            lambda *_args, **kwargs: PreparedRuntime(
+                _ImmediateRuntime(exitCallback=kwargs['exitCallback'])
+            )
+        )
 
         with (
             mock.patch(
@@ -342,11 +370,8 @@ class ProfileTestServiceTest(unittest.TestCase):
             self.assertEqual(profile.metadata.speed, 'Starting')
             self.assertIsNone(worker.networkReply)
             self.assertTrue(worker.coreStartupTimer.isActive())
-            self.assertEqual(len(worker.coreManager.startCalls), 1)
-            self.assertIs(
-                worker.coreManager.startCalls[0][1].get('waitCore'),
-                False,
-            )
+            self.assertIsNotNone(worker._runtimeLease)
+            self.assertTrue(worker._runtimeLease.runtime.isRunning())
 
         manager.shutdown()
 
@@ -871,15 +896,18 @@ class ProfileTestServiceTest(unittest.TestCase):
             30000,
             DownloadSpeedTestOptions(5000, 'https://example.test'),
         )
-        coreManager = _CoreManagerProbe()
-        worker.coreManager = coreManager
+        lease = mock.Mock()
+        worker._runtimeLease = lease
         worker.finished.connect(lambda current, _result: current.deleteLater())
 
         worker.runCompletionCallback()
 
-        self.assertEqual(coreManager.stopCount, 1)
+        lease.release.assert_called_once_with()
         self.assertTrue(waitFor(lambda: not isValid(worker)))
-        worker.coreExitCallback(profile.connection, 1)
+        worker.runtimeExited(
+            profile.connection,
+            RuntimeExit(1, RuntimeExitReason.Unexpected),
+        )
         self.assertEqual(profile.metadata.speed, '')
 
     def testServerTableRepaintsOnlyTheCellCommittedByTheService(self):

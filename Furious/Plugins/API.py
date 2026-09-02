@@ -28,12 +28,12 @@ __all__ = [
     'ActionProvider',
     'CapabilityKind',
     'CoreRuntimeFactory',
-    'CoreRuntimeLaunch',
     'CoreRuntimeRequest',
     'CoreRuntimeStartup',
     'FuriousPlugin',
     'NavigationPageDescriptor',
     'NavigationPageProvider',
+    'PreparedRuntime',
     'PluginCapability',
     'PluginContext',
     'PluginMetadata',
@@ -415,27 +415,15 @@ class CoreRuntimeStartup:
 
 
 @dataclass(frozen=True)
-class CoreRuntimeLaunch:
-    """Bind a constructed core runtime to its prepared start arguments."""
+class PreparedRuntime:
+    """Return one execution-ready runtime and separate readiness policy."""
 
     runtime: Any
-    configuration: Any
-    arguments: Tuple[Any, ...] = tuple()
-    options: Mapping[str, Any] = field(default_factory=dict)
-    startup: Optional[CoreRuntimeStartup] = None
+    readiness: Optional[CoreRuntimeStartup] = None
 
-    def start(self, **optionOverrides) -> bool:
-        """Start the prepared core runtime."""
-        options = dict(self.options)
-        options.update(optionOverrides)
-
-        return bool(
-            self.runtime.start(
-                self.configuration,
-                *self.arguments,
-                **options,
-            )
-        )
+    def start(self):
+        """Acquire execution resources through the prepared start boundary."""
+        self.runtime.start()
 
 
 class CoreRuntimeFactory(PluginCapability):
@@ -477,8 +465,8 @@ class CoreRuntimeFactory(PluginCapability):
     def configureEnvironment(self):
         """Set optional environment required by this backend's runtime."""
 
-    def create(self, request: CoreRuntimeRequest) -> Optional[CoreRuntimeLaunch]:
-        """Create a prepared core-runtime launch."""
+    def create(self, request: CoreRuntimeRequest) -> Optional[PreparedRuntime]:
+        """Create a prepared runtime; API-v3 launches are registry-adapted."""
         return None
 
     def prepareDownloadTest(self, config, port: int):
@@ -492,10 +480,6 @@ class CoreRuntimeFactory(PluginCapability):
     def logTimestampPatterns(self):
         """Return timestamp expressions emitted by this backend."""
         return tuple()
-
-    def coreExitMessage(self, core, exitcode: int):
-        """Return a user-facing message key for a special exit code."""
-        return None
 
     def afterConnected(self, httpProxy=None):
         """Perform optional maintenance after a connection succeeds."""

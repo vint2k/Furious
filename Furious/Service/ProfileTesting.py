@@ -28,7 +28,8 @@ from Furious.Frozenlib import (
     OS_CPU_COUNT,
     classname,
 )
-from Furious.Core import CoreLaunchSpec
+from Furious.Interface import RuntimeExit, RuntimeExitReason, RuntimeStartError
+from Furious.Service.RuntimeLease import RuntimeEventRouter, RuntimeLease
 from Furious.Interface import CoreRuntime
 from Furious.Models import ServerProfile, profileConnectionFingerprint
 from Furious.Plugins import getPluginRegistry
@@ -54,8 +55,11 @@ from enum import Enum
 from typing import Callable, Iterable
 
 import icmplib
+import logging
 import weakref
 import collections
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     'DownloadSpeedTestOptions',
@@ -663,7 +667,7 @@ class _LatencyScheduler(QtCore.QObject):
 class _DownloadSpeedWorker(HttpGetManager):
     """Own one temporary core and proxied HTTP download test."""
 
-    CoreStartupGraceMilliseconds = CoreLaunchSpec.DefaultWaitTime
+    CoreStartupGraceMilliseconds = 2500
 
     progressed = QtCore.Signal(object, object)
     finished = QtCore.Signal(object, object)
@@ -693,7 +697,7 @@ class _DownloadSpeedWorker(HttpGetManager):
         self._startInProgress = False
         self._completionInProgress = False
         self._pendingCompletionKwargs = None
-        self.coreManager = ConnectionManager()
+        self._runtimeLease = None
         self.networkReply = None
 
         self.elapsedTimer = QtCore.QElapsedTimer()
@@ -737,9 +741,24 @@ class _DownloadSpeedWorker(HttpGetManager):
         self.timeoutTimer.stop()
 
         try:
-            self.coreManager.stopAll()
+            self._releaseRuntime()
         finally:
             self.finished.emit(self, replace(self.result, terminal=True))
+
+    def _runtimeRunning(self) -> bool:
+        """Passively report whether this worker's exact leased runtime is alive."""
+        lease = self._runtimeLease
+
+        return lease is not None and lease.runtime.isRunning()
+
+    def _releaseRuntime(self):
+        """Release this worker's exact runtime lease once."""
+        lease = self._runtimeLease
+
+        self._runtimeLease = None
+
+        if lease is not None:
+            lease.release()
 
     def runCompletionCallback(self, **kwargs):
         """Defer terminal publication until synchronous startup has unwound."""
@@ -811,18 +830,18 @@ class _DownloadSpeedWorker(HttpGetManager):
         finally:
             self.runCompletionCallback()
 
-    def coreExitCallback(self, _config, exitcode: int):
-        """Translate an unexpected temporary-core exit into a result."""
+    def runtimeExited(self, _runtime, event: RuntimeExit):
+        """Translate one typed temporary-runtime exit into a test result."""
         if self.cancelled or self.completionHasRun:
             return
 
         try:
-            if exitcode == CoreRuntime.ExitCode.ConfigurationError.value:
+            if event.reason is RuntimeExitReason.InvalidConfiguration:
                 self.setResult('Invalid')
-            elif exitcode == CoreRuntime.ExitCode.ServerStartFailure.value:
+            elif event.reason is RuntimeExitReason.StartFailure:
                 self.setResult('Core start failed')
-            elif exitcode != CoreRuntime.ExitCode.SystemShuttingDown.value:
-                self.setResult(f'Core exited {exitcode}')
+            elif event.unexpected:
+                self.setResult(f'Core exited {event.code}')
         finally:
             self.runCompletionCallback()
 
@@ -837,16 +856,48 @@ class _DownloadSpeedWorker(HttpGetManager):
 
         self.setResult('Starting')
 
-        return self.coreManager.start(
-            config,
-            AppBuiltinRouting.Global.value,
-            self.coreExitCallback,
-            msgCallbackCore=AppLogManager().callback(CORE_LOG_CATEGORY),
-            deepcopy=False,
-            proxyModeOnly=True,
-            log=False,
-            waitCore=False,
-        )
+        router = RuntimeEventRouter()
+
+        try:
+            launch = getPluginRegistry().createCoreRuntime(
+                config,
+                AppBuiltinRouting.Global.value,
+                exitCallback=router.publish,
+                messageCallback=AppLogManager().callback(CORE_LOG_CATEGORY),
+                proxyModeOnly=True,
+                log=False,
+            )
+
+            if launch is None:
+                self.setResult('Invalid')
+
+                return False
+
+            runtime = launch.runtime
+
+            router.attach(runtime, self)
+
+            self._runtimeLease = RuntimeLease(runtime, router)
+
+            launch.start()
+        except RuntimeStartError as ex:
+            self.setResult(
+                'Invalid'
+                if ex.reason is RuntimeExitReason.InvalidConfiguration
+                else 'Core start failed'
+            )
+
+            return False
+        except Exception:
+            # Any non-exit exceptions
+
+            logger.exception('failed to start temporary download-test runtime')
+
+            self.setResult('Core start failed')
+
+            return False
+
+        return True
 
     def start(self):
         """Launch the temporary core without blocking concurrent admission."""
@@ -886,7 +937,7 @@ class _DownloadSpeedWorker(HttpGetManager):
             if _appIsExiting() or self._completionRequested():
                 return
 
-            if not self.coreManager.allRunning():
+            if not self._runtimeRunning():
                 self.setResult('Core start failed')
 
                 return
@@ -926,13 +977,13 @@ class _DownloadSpeedWorker(HttpGetManager):
         if self.cancelled or self.completionHasRun:
             return
 
-        if self.coreManager.allRunning():
+        if self._runtimeRunning():
             self.totalBytesRead += networkReply.readAll().length()
             self.setResult(self._currentSpeed(), publish=False)
         else:
             self.setResult('Core start failed', publish=False)
 
-        self.coreManager.stopAll()
+        self._releaseRuntime()
         self.publishProgress()
 
     def hasDataCallback(self, networkReply, **_kwargs):
@@ -942,7 +993,7 @@ class _DownloadSpeedWorker(HttpGetManager):
 
         self.hasDataCounter += 1
 
-        if self.coreManager.allRunning():
+        if self._runtimeRunning():
             self.totalBytesRead += networkReply.readAll().length()
             self.hasSpeedResult = True
             self.setResult(self._currentSpeed(), publish=False)
@@ -956,7 +1007,7 @@ class _DownloadSpeedWorker(HttpGetManager):
             return
 
         if not self.hasSpeedResult:
-            if not self.coreManager.allRunning():
+            if not self._runtimeRunning():
                 return
 
             if (
@@ -980,7 +1031,7 @@ class _DownloadSpeedWorker(HttpGetManager):
 
             self.setResult(value, publish=False)
 
-        self.coreManager.stopAll()
+        self._releaseRuntime()
         self.publishProgress()
 
 

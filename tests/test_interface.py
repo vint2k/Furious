@@ -25,10 +25,14 @@ from Furious.Interface import (
     CoreRuntime,
     EditorBinding,
     EditorWidgetBinding,
+    RuntimeExit,
+    RuntimeExitReason,
+    RuntimeStartError,
     StorageBackend,
 )
 from Furious.Models import CoreConfiguration
 from Furious.Models.Encoding import UJSONEncoder
+from Furious.Plugins.Runtime import serializeRuntimeConfiguration
 
 import json
 import unittest
@@ -112,38 +116,40 @@ class InterfaceContractTest(unittest.TestCase):
         )
 
     def testCoreRuntimeExitCallback(self):
-        """Keep the runtime callback argument order stable."""
+        """Publish one typed event while preserving runtime identity."""
         observed = []
         runtime = RuntimeFixture(
-            exitCallback=lambda runtime, exitcode: observed.append((runtime, exitcode))
+            exitCallback=lambda runtime, event: observed.append((runtime, event))
         )
 
-        runtime.callExitCallback(7)
+        runtime.publishExit(runtime.interpretExit(7))
 
-        self.assertEqual(observed, [(runtime, 7)])
+        self.assertEqual(len(observed), 1)
+        self.assertIs(observed[0][0], runtime)
+        self.assertIsInstance(observed[0][1], RuntimeExit)
+        self.assertEqual(observed[0][1].code, 7)
+        self.assertIs(observed[0][1].reason, RuntimeExitReason.Unexpected)
 
     def testPlainDictionarySerializationUsesSharedUJSONEncoder(self):
         """Reuse the shared high-performance encoder for plain dictionaries."""
-        runtime = RuntimeFixture()
         document = {'name': '节点', 'url': 'https://example.com/path'}
 
         with mock.patch(
-            'Furious.Interface.Runtime.UJSONEncoder.encode',
+            'Furious.Plugins.Runtime.UJSONEncoder.encode',
             wraps=UJSONEncoder.encode,
         ) as encode:
-            encoded = runtime.toJSONString(document)
+            encoded = serializeRuntimeConfiguration(document, 'Test runtime')
 
         encode.assert_called_once_with(document)
 
         self.assertEqual(json.loads(encoded), document)
-        self.assertEqual(runtime.startError(), '')
 
     def testForwardSlashEscapingRemainsCompatible(self):
         """Preserve the existing optional forward-slash escaping convention."""
-        runtime = RuntimeFixture()
-
-        encoded = runtime.toJSONString(
-            {'url': 'https://example.com'}, escape_forward_slashes=True
+        encoded = serializeRuntimeConfiguration(
+            {'url': 'https://example.com'},
+            'Test runtime',
+            escape_forward_slashes=True,
         )
 
         self.assertIn(r'https:\/\/example.com', encoded)
@@ -163,72 +169,87 @@ class InterfaceContractTest(unittest.TestCase):
 
                 return '{"custom": true}'
 
-        runtime = RuntimeFixture()
         configuration = Configuration()
 
-        encoded = runtime.toJSONString(configuration, indent=2)
+        encoded = serializeRuntimeConfiguration(configuration, 'Test runtime', indent=2)
 
         self.assertEqual(encoded, '{"custom": true}')
         self.assertEqual(configuration.kwargs, {'indent': 2})
-        self.assertEqual(runtime.startError(), '')
 
-    def testSerializationFailuresPopulateStartErrorAndLogDetails(self):
-        """Keep the legacy empty return while making failures diagnosable."""
-        runtime = RuntimeFixture()
+    def testSerializationFailuresRaiseStructuredPreparationErrors(self):
+        """Keep expected configuration failure out of mutable runtime state."""
+        for configuration in ({'value': object()}, object()):
+            with self.subTest(configuration=type(configuration).__name__):
+                with self.assertLogs('Furious.Plugins.Runtime', level='ERROR'):
+                    with self.assertRaises(RuntimeStartError) as raised:
+                        serializeRuntimeConfiguration(configuration, 'Test runtime')
 
-        with self.assertLogs('Furious.Interface.Runtime', level='ERROR'):
-            encoded = runtime.toJSONString({'value': object()})
-
-        self.assertEqual(encoded, '')
-        self.assertEqual(runtime.startError(), 'Invalid server configuration')
-
-        with self.assertLogs('Furious.Interface.Runtime', level='ERROR'):
-            encoded = runtime.toJSONString(object())
-
-        self.assertEqual(encoded, '')
-        self.assertEqual(runtime.startError(), 'Invalid server configuration')
+                self.assertIs(
+                    raised.exception.reason,
+                    RuntimeExitReason.InvalidConfiguration,
+                )
 
     def testCoreConfigurationSerializationDiagnosticReachesRuntime(self):
         """Forward the model serializer's concrete failure to startup callers."""
-        runtime = RuntimeFixture()
         configuration = CoreConfiguration({'value': object()})
 
-        with self.assertLogs('Furious.Interface.Runtime', level='ERROR'):
-            encoded = runtime.toJSONString(configuration)
+        with self.assertLogs('Furious.Plugins.Runtime', level='ERROR'):
+            with self.assertRaises(RuntimeStartError) as raised:
+                serializeRuntimeConfiguration(configuration, 'Test runtime')
 
-        self.assertEqual(encoded, '')
-        self.assertEqual(runtime.startError(), configuration.serializationError())
+        self.assertEqual(
+            raised.exception.details,
+            configuration.serializationError(),
+        )
 
-    def testSuccessfulSerializationClearsPreviousStartError(self):
-        """Expose only the failure from the current launch preparation attempt."""
-        runtime = RuntimeFixture()
-        runtime.setStartError('old failure')
+    def testSerializationDiagnosticFailureRemainsStructured(self):
+        """Guard a failing diagnostic hook behind the preparation exception."""
 
-        self.assertEqual(runtime.toJSONString('{}'), '{}')
-        self.assertEqual(runtime.startError(), '')
+        class Configuration(dict):
+            def toJSONString(self):
+                return ''
 
-    def testEmbeddedRuntimeLaunchSpecsExposeSerializationFailures(self):
-        """Give the connection layer a useful error for every embedded runtime."""
+            def serializationError(self):
+                raise RuntimeError('diagnostic fixture')
+
+        with self.assertLogs('Furious.Plugins.Runtime', level='ERROR'):
+            with self.assertRaises(RuntimeStartError) as raised:
+                serializeRuntimeConfiguration(Configuration(), 'Test runtime')
+
+        self.assertIs(
+            raised.exception.reason,
+            RuntimeExitReason.InvalidConfiguration,
+        )
+        self.assertEqual(raised.exception.details, 'diagnostic fixture')
+
+    def testAlreadySerializedConfigurationPassesThroughWithoutRuntimeState(self):
+        """Accept prepared JSON without creating a mutable error side channel."""
+        self.assertEqual(
+            serializeRuntimeConfiguration('{}', 'Test runtime'),
+            '{}',
+        )
+
+    def testEmbeddedRuntimesOwnPreparedExecutionOnly(self):
+        """Require built-in runtimes to receive serialized preparation inputs."""
         from Furious.Backends.Hysteria1.Process import Hysteria1
         from Furious.Backends.Hysteria2.Process import Hysteria2
         from Furious.Backends.Xray.Process import XrayCore
 
-        launchAttempts = (
-            (XrayCore, lambda runtime: runtime.launchSpec(object())),
-            (Hysteria1, lambda runtime: runtime.launchSpec(object(), '', '')),
-            (Hysteria2, lambda runtime: runtime.launchSpec(object())),
+        runtimes = (
+            XrayCore('{}'),
+            Hysteria1('{}', '', ''),
+            Hysteria2('{}'),
         )
 
-        for runtimeType, launch in launchAttempts:
-            with self.subTest(runtime=runtimeType.__name__):
-                runtime = object.__new__(runtimeType)
-                CoreRuntime.__init__(runtime)
-
-                with self.assertLogs('Furious.Interface.Runtime', level='ERROR'):
-                    launchSpec = launch(runtime)
-
-                self.assertIsNone(launchSpec)
-                self.assertEqual(runtime.startError(), 'Invalid server configuration')
+        try:
+            for runtime in runtimes:
+                with self.subTest(runtime=type(runtime).__name__):
+                    self.assertFalse(runtime.isRunning())
+                    self.assertFalse(hasattr(runtime, 'toJSONString'))
+                    self.assertFalse(hasattr(runtime, 'startError'))
+        finally:
+            for runtime in runtimes:
+                runtime.dispose()
 
     def testRepresentativeImplementationsShareCoreRuntimeContract(self):
         """Cover subprocess and multiprocessing-backed runtime implementations."""
@@ -236,7 +257,7 @@ class InterfaceContractTest(unittest.TestCase):
         from Furious.Backends.Hysteria1.Process import Hysteria1
         from Furious.Backends.Hysteria2.Process import Hysteria2
         from Furious.Backends.Xray.Process import XrayCore
-        from Furious.Core import CoreProcessWorker, Tun2socks
+        from Furious.Core import MultiprocessingRuntime, Tun2socks
 
         for runtimeType in (
             ExternalCoreProcess,
@@ -250,9 +271,9 @@ class InterfaceContractTest(unittest.TestCase):
 
         for runtimeType in (Hysteria1, Hysteria2, XrayCore, Tun2socks):
             with self.subTest(processBacked=runtimeType.__name__):
-                self.assertTrue(issubclass(runtimeType, CoreProcessWorker))
+                self.assertTrue(issubclass(runtimeType, MultiprocessingRuntime))
 
-        self.assertFalse(issubclass(ExternalCoreProcess, CoreProcessWorker))
+        self.assertFalse(issubclass(ExternalCoreProcess, MultiprocessingRuntime))
 
     def testEditorBindingDirectionAndWidgetIdentity(self):
         """Keep editor data flow explicit and widget references stable."""

@@ -186,19 +186,19 @@ class VeryHeavyContractTest(unittest.TestCase):
                     'shutdownTimeout': 1,
                 }
             )
-            runtime = ExternalCoreProcess()
+            runtime = ExternalCoreProcess(configuration)
 
             try:
                 for index in range(100):
-                    self.assertTrue(runtime.start(configuration))
+                    self.assertIsNone(runtime.start())
                     process = runtime.process
 
                     self.assertIsNotNone(process)
-                    self.assertTrue(runtime.isAlive())
+                    self.assertTrue(runtime.isRunning())
 
                     runtime.stop()
 
-                    self.assertFalse(runtime.isAlive())
+                    self.assertFalse(runtime.isRunning())
                     self.assertIsNone(runtime.process)
                     self.assertFalse(runtime._readerThreads)
                     self.assertIsNone(runtime._watcherThread)

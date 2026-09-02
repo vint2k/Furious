@@ -15,26 +15,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Expose reusable proxy-process primitives without application orchestration."""
+"""Expose execution-only runtime primitives without connection orchestration."""
 
 from __future__ import annotations
 
-from .CoreProcessWorker import (
-    CoreLaunchSpec,
-    CoreProcessMonitor,
-    CoreProcessState,
-    CoreProcessWorker,
-    MsgQueue,
-    ProcessOutputRedirector,
-)
+from .MultiprocessingRuntime import MultiprocessingRuntime, ProcessLaunchSpec
+from .ProcessOutput import MsgQueue, ProcessOutputRedirector
 from .Tun2socks import Tun2socks
 
 __all__ = [
-    'CoreLaunchSpec',
-    'CoreProcessMonitor',
-    'CoreProcessState',
-    'CoreProcessWorker',
+    'MultiprocessingRuntime',
     'MsgQueue',
+    'ProcessLaunchSpec',
     'ProcessOutputRedirector',
     'Tun2socks',
 ]

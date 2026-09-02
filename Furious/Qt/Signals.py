@@ -122,6 +122,7 @@ def connectWeakly(
     *,
     sender=None,
     forwardSender: bool = False,
+    connectionType=None,
 ):
     """Connect without strongly owning a transient receiver or sender."""
     # A plain dispatcher is intentional. Nuitka's PySide6 compatibility layer
@@ -132,7 +133,12 @@ def connectWeakly(
         sender=sender,
         forwardSender=forwardSender,
     )
-    connection = signal.connect(invoke)
+
+    connection = (
+        signal.connect(invoke)
+        if connectionType is None
+        else signal.connect(invoke, connectionType)
+    )
 
     if (
         isinstance(receiver, QtCore.QObject)

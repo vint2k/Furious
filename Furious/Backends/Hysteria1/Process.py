@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 from Furious.Frozenlib import *
+from Furious.Interface import RuntimeExit, RuntimeExitReason
 from Furious.Core import *
 
 from enum import Enum
@@ -56,7 +57,7 @@ def startHysteria1(jsonString, rule, mmdb, msgQueue: multiprocessing.Queue):
         )
 
 
-class Hysteria1(CoreProcessWorker):
+class Hysteria1(MultiprocessingRuntime):
     """Manage the embedded Hysteria 1 core subprocess."""
 
     class ExitCode(Enum):
@@ -67,9 +68,16 @@ class Hysteria1(CoreProcessWorker):
         # Windows shutting down
         SystemShuttingDown = 0x40010004
 
-    def __init__(self, **kwargs):
-        """Initialize the Hysteria1."""
-        super().__init__(**kwargs)
+    def __init__(self, configuration: str, rule, mmdb, **kwargs):
+        """Initialize a fully prepared Hysteria 1 execution runtime."""
+        super().__init__(
+            lambda output: ProcessLaunchSpec(
+                target=startHysteria1,
+                args=(configuration, rule, mmdb, output),
+                processOptions=kwargs.pop('processOptions', {}),
+            ),
+            **kwargs,
+        )
 
     @staticmethod
     def loadOptionalFile(pathLike, fileType: str):
@@ -130,31 +138,12 @@ class Hysteria1(CoreProcessWorker):
 
             return '0.0.0'
 
-    def launchSpec(
-        self, config: Union[str, dict], rule, mmdb, **kwargs
-    ) -> Union[CoreLaunchSpec, None]:
-        """Build the child-process launch specification."""
-        param = self.toJSONString(config)
+    def interpretExit(self, exitcode: int, *, requested: bool = False):
+        """Interpret Hysteria 1's remote-network failure at its boundary."""
+        if not requested and exitcode == self.ExitCode.RemoteNetworkError.value:
+            return RuntimeExit(
+                exitcode,
+                RuntimeExitReason.ConnectionLost,
+            )
 
-        if not param:
-            return None
-
-        return CoreLaunchSpec(
-            target=startHysteria1,
-            args=(
-                param,
-                rule,
-                mmdb,
-                self.msgQueue,
-            ),
-            processKwargs=kwargs,
-        )
-
-    def start(self, config: Union[str, dict], rule, mmdb, **kwargs) -> bool:
-        """Start the hysteria1."""
-        launchSpec = self.launchSpec(config, rule, mmdb, **kwargs)
-
-        if launchSpec is None:
-            return False
-
-        return self.startWithSpec(launchSpec)
+        return super().interpretExit(exitcode, requested=requested)

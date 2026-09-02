@@ -56,7 +56,7 @@ def startHysteria2(jsonString: str, msgQueue: multiprocessing.Queue):
         )
 
 
-class Hysteria2(CoreProcessWorker):
+class Hysteria2(MultiprocessingRuntime):
     """Manage the embedded Hysteria 2 core subprocess."""
 
     class ExitCode(Enum):
@@ -68,9 +68,16 @@ class Hysteria2(CoreProcessWorker):
         # Windows shutting down
         SystemShuttingDown = 0x40010004
 
-    def __init__(self, **kwargs):
-        """Initialize the Hysteria2."""
-        super().__init__(**kwargs)
+    def __init__(self, configuration: str, **kwargs):
+        """Initialize a fully prepared Hysteria 2 execution runtime."""
+        super().__init__(
+            lambda output: ProcessLaunchSpec(
+                target=startHysteria2,
+                args=(configuration, output),
+                processOptions=kwargs.pop('processOptions', {}),
+            ),
+            **kwargs,
+        )
 
     @staticmethod
     def name() -> str:
@@ -88,30 +95,3 @@ class Hysteria2(CoreProcessWorker):
             # Any non-exit exceptions
 
             return '0.0.0'
-
-    def launchSpec(
-        self, config: Union[str, dict], **kwargs
-    ) -> Union[CoreLaunchSpec, None]:
-        """Build the child-process launch specification."""
-        param = self.toJSONString(config)
-
-        if not param:
-            return None
-
-        return CoreLaunchSpec(
-            target=startHysteria2,
-            args=(
-                param,
-                self.msgQueue,
-            ),
-            processKwargs=kwargs,
-        )
-
-    def start(self, config: Union[str, dict], **kwargs) -> bool:
-        """Start the hysteria2."""
-        launchSpec = self.launchSpec(config, **kwargs)
-
-        if launchSpec is None:
-            return False
-
-        return self.startWithSpec(launchSpec)

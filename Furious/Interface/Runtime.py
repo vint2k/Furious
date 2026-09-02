@@ -15,162 +15,225 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Define the lifecycle contract for one managed proxy-core runtime."""
+"""Define the execution-only contract shared by managed core runtimes."""
 
 from __future__ import annotations
 
 from Furious.Frozenlib.Constants import PLATFORM
-from Furious.Models.Encoding import UJSONEncoder
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Union
 
-import functools
-import logging
+__all__ = [
+    'CoreRuntime',
+    'RuntimeExit',
+    'RuntimeExitReason',
+    'RuntimeStartError',
+    'RuntimeState',
+]
 
-__all__ = ['CoreRuntime']
 
-logger = logging.getLogger(__name__)
+class RuntimeState(str, Enum):
+    """Describe execution-resource state without implying service readiness."""
 
-_INVALID_CONFIGURATION_ERROR = 'Invalid server configuration'
+    Created = 'created'
+    Starting = 'starting'
+    Alive = 'alive'
+    Stopping = 'stopping'
+    Exited = 'exited'
+    Failed = 'failed'
+    Disposed = 'disposed'
+
+
+class RuntimeExitReason(str, Enum):
+    """Classify the small set of exit meanings shared by runtime consumers."""
+
+    Stopped = 'stopped'
+    InvalidConfiguration = 'invalid-configuration'
+    StartFailure = 'start-failure'
+    ConnectionLost = 'connection-lost'
+    SystemShuttingDown = 'system-shutting-down'
+    Unexpected = 'unexpected'
+
+
+_EXIT_MESSAGES = {
+    RuntimeExitReason.Stopped: '',
+    RuntimeExitReason.InvalidConfiguration: 'Invalid server configuration',
+    RuntimeExitReason.StartFailure: 'Failed to start core',
+    RuntimeExitReason.ConnectionLost: 'Connection to server has been lost',
+    RuntimeExitReason.SystemShuttingDown: '',
+    RuntimeExitReason.Unexpected: 'Core terminated unexpectedly',
+}
+
+
+@dataclass(frozen=True)
+class RuntimeExit:
+    """Publish one interpreted runtime termination with its raw diagnostic code."""
+
+    code: Union[int, None]
+    reason: RuntimeExitReason
+    message: str = ''
+    details: str = ''
+
+    def __post_init__(self):
+        """Fill the stable default message for one semantic reason."""
+        if not self.message:
+            object.__setattr__(self, 'message', _EXIT_MESSAGES[self.reason])
+
+    @property
+    def unexpected(self) -> bool:
+        """Return whether the owner should treat this exit as a failure."""
+        return self.reason not in (
+            RuntimeExitReason.Stopped,
+            RuntimeExitReason.SystemShuttingDown,
+        )
+
+
+class RuntimeStartError(RuntimeError):
+    """Report one expected failure to acquire a live runtime execution resource."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason: RuntimeExitReason = RuntimeExitReason.StartFailure,
+        details: str = '',
+        code: Union[int, None] = None,
+    ):
+        """Initialize a structured startup failure."""
+        super().__init__(str(message or _EXIT_MESSAGES[reason]))
+
+        self.reason = reason
+        self.message = str(message or _EXIT_MESSAGES[reason])
+        self.details = str(details or '')
+        self.code = code
+
+    @classmethod
+    def fromExit(cls, event: RuntimeExit, *, details: str = ''):
+        """Build a startup failure from a termination observed during spawn."""
+        return cls(
+            event.message,
+            reason=event.reason,
+            details=details or event.details,
+            code=event.code,
+        )
 
 
 class CoreRuntime(ABC):
-    """Manage one startable and stoppable proxy-core runtime instance.
+    """Own one core's execution resources and publish typed exit events.
 
-    A runtime represents the semantic lifecycle of one proxy core. Concrete
-    implementations may use a subprocess, multiprocessing, or an in-process
-    binding; those execution mechanisms are intentionally outside this
-    contract.
+    Runtime state describes only execution. Endpoint/TUN readiness, startup
+    timeouts, transaction sequencing, and commit belong to service owners.
+
+    ``exitCallback`` is bound once before start and remains stable until final
+    disposal. It receives ``(runtime, RuntimeExit)`` and may be called from an
+    implementation worker thread; the supplied owner must provide its own
+    thread-safe handoff.
     """
 
     class ExitCode(Enum):
-        """Enumerate shared semantic core exit codes."""
+        """Define raw process-exit values shared by runtime implementations."""
 
         ConfigurationError = 23
-        # Windows: 4294967295. Darwin, Linux: 255 (-1)
         ServerStartFailure = 4294967295 if PLATFORM == 'Windows' else 255
-        # Windows shutting down
         SystemShuttingDown = 0x40010004
 
     def __init__(
         self,
-        exitCallback: Union[Callable[[CoreRuntime, int], None], None] = None,
+        exitCallback: Union[Callable[[CoreRuntime, RuntimeExit], None], None] = None,
     ):
-        """Initialize an idle core runtime."""
+        """Initialize a created runtime with one optional stable event sink."""
         super().__init__()
 
         self._exitCallback = exitCallback
-        self._startError = ''
+        self._state = RuntimeState.Created
+        self._disposed = False
 
-    def callExitCallback(self, exitcode: int):
-        """Report this runtime's termination to its lifecycle owner."""
-        if callable(self._exitCallback):
-            self._exitCallback(self, exitcode)
+    @property
+    def state(self) -> RuntimeState:
+        """Return execution-resource state, never connection readiness."""
+        return self._state
 
-    def setExitCallback(self, callback):
-        """Transfer termination reporting to the runtime's current owner."""
+    def setState(self, state: RuntimeState):
+        """Move to one explicit execution-resource state."""
+        self._state = RuntimeState(state)
+
+    def bindExitCallback(self, callback):
+        """Bind the runtime's event sink exactly once before execution starts."""
+        if not callable(callback):
+            raise TypeError('runtime exit callback must be callable')
+
+        if self._exitCallback is not None and self._exitCallback is not callback:
+            raise RuntimeError('runtime exit callback is already bound')
+
+        if self.state is not RuntimeState.Created:
+            raise RuntimeError('runtime exit callback must be bound before start')
+
         self._exitCallback = callback
 
-    def confirmStartup(self) -> bool:
-        """Confirm readiness after an external startup observer succeeds."""
-        return True
+    def interpretExit(self, exitcode: int, *, requested: bool = False) -> RuntimeExit:
+        """Interpret one raw code once at the runtime boundary."""
+        if requested:
+            reason = RuntimeExitReason.Stopped
+        elif exitcode == self.ExitCode.ConfigurationError.value:
+            reason = RuntimeExitReason.InvalidConfiguration
+        elif exitcode == self.ExitCode.ServerStartFailure.value:
+            reason = RuntimeExitReason.StartFailure
+        elif exitcode == self.ExitCode.SystemShuttingDown.value:
+            reason = RuntimeExitReason.SystemShuttingDown
+        else:
+            reason = RuntimeExitReason.Unexpected
 
-    def startError(self) -> str:
-        """Return the most recent concise startup failure, if any."""
-        return self._startError
+        return RuntimeExit(exitcode, reason)
 
-    def setStartError(self, message: str):
-        """Store a concise user-facing startup failure."""
-        self._startError = str(message or '')
+    def publishExit(self, event: RuntimeExit):
+        """Publish one already interpreted exit through the stable event sink."""
+        if not isinstance(event, RuntimeExit):
+            raise TypeError('runtime exits must be RuntimeExit values')
 
-    def clearStartError(self):
-        """Clear a startup failure before another launch attempt."""
-        self._startError = ''
+        if callable(self._exitCallback):
+            self._exitCallback(self, event)
 
-    @functools.singledispatchmethod
-    def toJSONString(self, config, **kwargs) -> str:
-        """Serialize a prepared runtime configuration as JSON text."""
-        self.setStartError(_INVALID_CONFIGURATION_ERROR)
-
-        logger.error(
-            f'cannot serialize {type(config).__name__} '
-            f'configuration for {self.name()}',
-        )
-
-        return ''
-
-    @toJSONString.register(str)
-    def _(self, config, **kwargs) -> str:
-        """Accept an already serialized runtime configuration."""
-        if not config:
-            self.setStartError(_INVALID_CONFIGURATION_ERROR)
-
-            logger.error(f'cannot start {self.name()} with an empty configuration')
-
-            return ''
-
-        self.clearStartError()
-
-        return config
-
-    @toJSONString.register(dict)
-    def _(self, config, **kwargs) -> str:
-        """Serialize a mapping with its own serializer or the shared encoder."""
-        serializer = getattr(config, 'toJSONString', None)
-
-        try:
-            if callable(serializer):
-                result = serializer(**kwargs)
-            else:
-                result = UJSONEncoder.encode(config, **kwargs)
-        except Exception:
-            # Any non-exit exceptions
-            self.setStartError(_INVALID_CONFIGURATION_ERROR)
-
-            logger.exception(f'failed to serialize configuration for {self.name()}')
-
-            return ''
-
-        if not isinstance(result, str) or not result:
-            diagnostic = ''
-            serializationError = getattr(config, 'serializationError', None)
-
-            if callable(serializationError):
-                diagnostic = str(serializationError() or '')
-
-            self.setStartError(diagnostic or _INVALID_CONFIGURATION_ERROR)
-
-            logger.error(
-                f'configuration serializer for {self.name()} returned no JSON'
-                + (f': {diagnostic}' if diagnostic else '')
-            )
-
-            return ''
-
-        self.clearStartError()
-
-        return result
+    def isRunning(self) -> bool:
+        """Passively report execution liveness without consuming an exit."""
+        return self.state is RuntimeState.Alive
 
     @staticmethod
     @abstractmethod
     def name() -> str:
-        """Return the proxy-core implementation name."""
+        """Return the runtime implementation's user-visible name."""
         raise NotImplementedError
 
     @staticmethod
     @abstractmethod
     def version() -> str:
-        """Return the bundled core version, if one exists."""
+        """Return the bundled implementation version, if one exists."""
         raise NotImplementedError
 
     @abstractmethod
-    def start(self, *args, **kwargs) -> bool:
-        """Start this core runtime."""
+    def start(self):
+        """Acquire execution resources or raise ``RuntimeStartError``."""
         raise NotImplementedError
 
     @abstractmethod
     def stop(self):
-        """Stop this core runtime."""
+        """Stop execution while leaving this runtime safe to dispose."""
         raise NotImplementedError
+
+    def dispose(self):
+        """Idempotently release final callbacks and execution resources."""
+        if self._disposed:
+            return
+
+        if self.state in (
+            RuntimeState.Starting,
+            RuntimeState.Alive,
+            RuntimeState.Stopping,
+        ):
+            self.stop()
+
+        self._exitCallback = None
+        self._disposed = True
+        self.setState(RuntimeState.Disposed)

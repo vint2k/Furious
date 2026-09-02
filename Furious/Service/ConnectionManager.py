@@ -33,19 +33,19 @@ from Furious.Frozenlib import (
     isValidIPAddress,
     parseHostPort,
 )
-from Furious.Interface import CoreRuntime
+from Furious.Interface import CoreRuntime, RuntimeExit, RuntimeStartError
 from Furious.Models import CoreConfiguration, ServerProfile
 from Furious.Repository import Storage
 from Furious.Plugins import (
-    CoreRuntimeLaunch,
     CoreRuntimeStartup,
+    PreparedRuntime,
     TUNPreparationError,
     getPluginRegistry,
 )
 from Furious.Qt.Signals import connectWeakly, singleShotWeakly
 from Furious.Service.DnsResolver import DnsResolver
-from Furious.Core.CoreProcessWorker import CoreProcessWorker
 from Furious.Core.Tun2socks import Tun2socks
+from Furious.Service.RuntimeLease import RuntimeEventRouter, RuntimeLease
 
 from typing import Callable, Tuple, Union
 from dataclasses import dataclass, field
@@ -68,17 +68,27 @@ class _ConnectionStartAttempt:
 
     manager: 'ConnectionManager'
     runtimeConfiguration: CoreConfiguration | ServerProfile
-    runtimes: list[CoreRuntime] = field(default_factory=list)
+    leases: list[RuntimeLease] = field(default_factory=list)
     nativeTUNHandled: bool = False
     applicationTun2socks: bool = False
     committed: bool = False
 
-    def ownRuntime(self, runtime: CoreRuntime | None):
-        """Retain one newly acquired runtime until the attempt commits."""
-        if runtime is None:
-            return
+    @property
+    def runtimes(self):
+        """Return an ordered execution-resource snapshot for this attempt."""
+        return [lease.runtime for lease in self.leases]
 
-        self.runtimes.append(runtime)
+    def ownRuntime(self, runtime: CoreRuntime | None, router=None):
+        """Retain one exact runtime lease until the attempt commits."""
+        if runtime is None:
+            return None
+
+        router = router or RuntimeEventRouter()
+        lease = RuntimeLease(runtime, router)
+
+        self.leases.append(lease)
+
+        return lease
 
     def rollback(self, message: str = '') -> bool:
         """Release this attempt's resources in reverse acquisition order."""
@@ -88,25 +98,23 @@ class _ConnectionStartAttempt:
         if self.committed:
             return False
 
-        for runtime in reversed(self.runtimes):
-            setExitCallback = getattr(runtime, 'setExitCallback', None)
+        for lease in reversed(self.leases):
+            lease.release()
 
-            if callable(setExitCallback):
-                setExitCallback(None)
-
-            self.manager._stopAndDisposeRuntime(runtime)
-
-        self.runtimes.clear()
+        self.leases.clear()
 
         return False
 
-    def commit(self):
+    def commit(self, exitCallback=None):
         """Atomically transfer acquired runtimes to the manager lifecycle."""
         if self.committed:
             return
 
-        self.manager.runtimes.extend(self.runtimes)
-        self.runtimes.clear()
+        for lease in self.leases:
+            lease.commit(exitCallback)
+
+        self.manager._leases.extend(self.leases)
+        self.leases.clear()
 
         self.committed = True
 
@@ -159,7 +167,7 @@ class ConnectionStartStage(Enum):
 
 
 class _RuntimeReadinessProbe(QtCore.QObject):
-    """Observe process survival and an optional local TCP endpoint."""
+    """Observe an optional local endpoint without competing with runtime exits."""
 
     ready = QtCore.Signal()
     failed = QtCore.Signal(str)
@@ -207,20 +215,9 @@ class _RuntimeReadinessProbe(QtCore.QObject):
         self._timer.start()
         self._poll()
 
-    def _runtimeAlive(self) -> bool:
-        """Return whether the observed runtime still owns a live process."""
-        isAlive = getattr(self._runtime, 'isAlive', None)
-
-        return bool(callable(isAlive) and isAlive())
-
     def _poll(self):
         """Retry endpoint connection and enforce the startup deadline."""
         if self._terminal:
-            return
-
-        if not self._runtimeAlive():
-            self._finishFailed('core process exited during startup')
-
             return
 
         timeout = max(int(self._startup.timeout), 1)
@@ -385,6 +382,7 @@ class ConnectionStartOperation(QtCore.QObject):
         )
 
         self.stage = ConnectionStartStage.Pending
+
         self._terminal = False
         self._readinessProbe = None
         self._conditionProbe = None
@@ -458,11 +456,13 @@ class ConnectionStartOperation(QtCore.QObject):
 
         self._setStage(ConnectionStartStage.StartingPrimary)
 
+        router = RuntimeEventRouter()
+
         try:
             launch = getPluginRegistry().createCoreRuntime(
                 self.attempt.runtimeConfiguration,
                 self.routing,
-                exitCallback=self.runtimeExitCallback,
+                exitCallback=router.publish,
                 messageCallback=self.msgCallbackCore,
                 proxyModeOnly=self.proxyModeOnly,
                 log=self.log,
@@ -475,49 +475,39 @@ class ConnectionStartOperation(QtCore.QObject):
 
             return
 
-        if not isinstance(launch, CoreRuntimeLaunch):
+        if not isinstance(launch, PreparedRuntime):
             self._fail('', 'no core runtime is available for this configuration')
 
             return
 
         runtime = launch.runtime
 
-        self.attempt.ownRuntime(runtime)
+        router.attach(runtime, self)
+
+        self.attempt.ownRuntime(runtime, router)
 
         try:
-            success = (
-                launch.start(waitCore=False)
-                if launch.startup is not None
-                else launch.start()
-            )
+            launch.start()
+        except RuntimeStartError as ex:
+            self._fail(ex.message, ex.details)
+
+            return
         except Exception as ex:
             # Any non-exit exceptions
 
-            self._fail(self._runtimeStartError(runtime), str(ex))
+            self._fail(self._runtimeStartMessage(runtime), str(ex))
 
             return
 
-        if not success:
-            self._fail(self._runtimeStartError(runtime))
-
-            return
-
-        if launch.startup is None:
+        if launch.readiness is None:
             self._resume('_afterPrimaryReady')
         else:
             self._observeRuntime(
                 runtime,
-                launch.startup,
+                launch.readiness,
                 '_afterPrimaryReady',
                 ConnectionStartStage.WaitingPrimary,
             )
-
-    @staticmethod
-    def _runtimeStartError(runtime):
-        """Return one concise error published by a failed runtime."""
-        startError = getattr(runtime, 'startError', None)
-
-        return str(startError() or '') if callable(startError) else ''
 
     def _observeRuntime(self, runtime, startup, continuation, stage):
         """Observe runtime readiness and resume through a named method."""
@@ -550,23 +540,25 @@ class ConnectionStartOperation(QtCore.QObject):
 
         probe.deleteLater()
 
-        confirmStartup = getattr(runtime, 'confirmStartup', None)
-
-        if callable(confirmStartup) and not confirmStartup():
-            self._fail(self._runtimeStartError(runtime))
-
-            return
-
         self._resume(continuation)
 
     def _runtimeReadinessFailed(self, message):
         """Fail the transaction when a readiness observer reaches terminal."""
-        if not self._isCurrent():
+        if not self._isCurrent() or self._readinessProbe is None:
+            return
+
+        probe = self._readinessProbe
+        runtime = probe._runtime
+
+        if not runtime.isRunning():
+            # The runtime owns process-exit interpretation. Its typed event may
+            # already be queued behind this direct readiness signal, so never
+            # replace that semantic failure with a generic endpoint timeout.
             return
 
         self._readinessProbe = None
         self._conditionContinuation = ''
-        self._fail('', message)
+        self._fail('Failed to start core', message)
 
     def _afterPrimaryReady(self):
         """Continue into application TUN or commit a proxy-only startup."""
@@ -578,28 +570,15 @@ class ConnectionStartOperation(QtCore.QObject):
         else:
             self._commit()
 
-    def runtimeExitCallback(self, runtime, exitcode):
-        """Abort when any attempt-owned runtime exits before commit."""
+    def runtimeExited(self, runtime, event: RuntimeExit):
+        """Abort on one typed exit while this attempt owns the runtime."""
         if not self._isCurrent():
             return
 
-        if exitcode == CoreRuntime.ExitCode.ConfigurationError.value:
-            message = 'Invalid server configuration'
-        elif exitcode == CoreRuntime.ExitCode.ServerStartFailure.value:
-            message = 'Failed to start core'
-        else:
-            try:
-                pluginMessage = getPluginRegistry().coreExitMessage(runtime, exitcode)
-            except Exception:
-                # Any non-exit exceptions
-
-                pluginMessage = None
-
-            message = pluginMessage or 'Core terminated unexpectedly'
-
         self._fail(
-            self._runtimeStartError(runtime) or message,
-            f'{runtime.name()} exited during startup with code {exitcode}',
+            event.message,
+            f'{runtime.name()} exited during {self.stage.value} with code '
+            f'{event.code}; reason={event.reason.value}',
         )
 
     def _beginApplicationTun(self):
@@ -657,14 +636,6 @@ class ConnectionStartOperation(QtCore.QObject):
 
                 return
 
-        tun = Tun2socks(
-            exitCallback=self.runtimeExitCallback,
-            msgCallback=self.msgCallbackTUN_,
-        )
-
-        self._tun = tun
-        self.attempt.ownRuntime(tun)
-
         tcpSendBufferSize = userTcpSendBufferSize()
         tcpReceiveBufferSize = userTcpReceiveBufferSize()
         tcpAutoTuning = userTcpAutoTuning() == 'True'
@@ -674,8 +645,8 @@ class ConnectionStartOperation(QtCore.QObject):
             else self._interface
         )
 
-        self._startTUN = functools.partial(
-            tun.start,
+        router = RuntimeEventRouter()
+        tun = Tun2socks(
             APPLICATION_TUN2SOCKS_DEVICE_NAME,
             interfaceArg,
             'error',
@@ -684,14 +655,22 @@ class ConnectionStartOperation(QtCore.QObject):
             f'{tcpSendBufferSize}MB',
             f'{tcpReceiveBufferSize}MB',
             tcpAutoTuning,
-            waitCore=False,
+            exitCallback=router.publish,
+            msgCallback=self.msgCallbackTUN_,
         )
+        router.attach(tun, self)
+
+        self._tun = tun
+        self.attempt.ownRuntime(tun, router)
+        self._startTUN = tun.start
 
         if PLATFORM != 'Linux':
             self._setStage(ConnectionStartStage.StartingTUNRuntime)
 
-            if not self._startTUN():
-                self._fail(self._runtimeStartError(tun))
+            try:
+                self._startTUN()
+            except RuntimeStartError as ex:
+                self._fail(ex.message, ex.details)
 
                 return
 
@@ -748,6 +727,7 @@ class ConnectionStartOperation(QtCore.QObject):
 
         resolver = self.manager._connectionDnsResolver()
         resolver.configureHttpProxy(self.attempt.runtimeConfiguration.httpProxy())
+
         operation = resolver.resolveAsync(address, parent=self)
 
         self._dnsOperation = operation
@@ -1010,8 +990,10 @@ class ConnectionStartOperation(QtCore.QObject):
 
         self._setStage(ConnectionStartStage.StartingTUNRuntime)
 
-        if not self._startTUN():
-            self._fail(self._runtimeStartError(self._tun))
+        try:
+            self._startTUN()
+        except RuntimeStartError as ex:
+            self._fail(ex.message, ex.details)
 
             return
 
@@ -1029,13 +1011,7 @@ class ConnectionStartOperation(QtCore.QObject):
 
         self._setStage(ConnectionStartStage.Committing)
 
-        for runtime in self.attempt.runtimes:
-            setExitCallback = getattr(runtime, 'setExitCallback', None)
-
-            if callable(setExitCallback):
-                setExitCallback(self.exitCallback)
-
-        self.attempt.commit()
+        self.attempt.commit(self.exitCallback)
         self._terminal = True
         self._setStage(ConnectionStartStage.Succeeded)
         self.succeeded.emit(self)
@@ -1103,10 +1079,15 @@ class ConnectionManager(Mixins.CleanupOnExit):
         super().__init__(*args, **kwargs)
 
         self.uniqueCleanup = False
-        self.runtimes = list()
+        self._leases = list()
         self._lastStartError = ''
         self._startGeneration = 0
         self._activeStartOperation = None
+
+    @property
+    def runtimes(self):
+        """Return committed runtimes without exposing the mutable owner list."""
+        return [lease.runtime for lease in self._leases]
 
     def _connectionDnsResolver(self) -> DnsResolver:
         """Return the resolver owned by this connection-manager lifecycle."""
@@ -1203,13 +1184,9 @@ class ConnectionManager(Mixins.CleanupOnExit):
         if success:
             return True
 
+        self._lastStartError = 'Failed to start core'
+
         if isinstance(runtime, CoreRuntime):
-            startError = getattr(runtime, 'startError', None)
-
-            if callable(startError):
-                self._lastStartError = startError()
-
-        if isinstance(runtime, CoreProcessWorker):
             logger.error(f'core {runtime.name()} start failed')
 
         return False
@@ -1291,6 +1268,7 @@ class ConnectionManager(Mixins.CleanupOnExit):
 
         self._lastStartError = ''
         self._startGeneration += 1
+
         operation = ConnectionStartOperation(
             self,
             self._startGeneration,
@@ -1304,7 +1282,9 @@ class ConnectionManager(Mixins.CleanupOnExit):
             log=log,
             options=kwargs,
         )
+
         self._activeStartOperation = operation
+
         singleShotWeakly(0, operation, 'start')
 
         return operation
@@ -1433,10 +1413,6 @@ class ConnectionManager(Mixins.CleanupOnExit):
             else:
                 return abortStart(f'unrecognized platform: {PLATFORM}')
 
-        tun = Tun2socks(exitCallback=exitCallback, msgCallback=msgCallbackTUN_)
-
-        attempt.ownRuntime(tun)
-
         tcpSendBufferSize, tcpReceiveBufferSize, tcpAutoTuning = (
             userTcpSendBufferSize(),
             userTcpReceiveBufferSize(),
@@ -1469,8 +1445,7 @@ class ConnectionManager(Mixins.CleanupOnExit):
         else:
             interfaceArg = interface
 
-        startTUN = functools.partial(
-            tun.start,
+        tun = Tun2socks(
             APPLICATION_TUN2SOCKS_DEVICE_NAME,
             interfaceArg,
             'error',
@@ -1479,11 +1454,19 @@ class ConnectionManager(Mixins.CleanupOnExit):
             f'{tcpSendBufferSize}MB',
             f'{tcpReceiveBufferSize}MB',
             tcpAutoTuning,
+            exitCallback=exitCallback,
+            msgCallback=msgCallbackTUN_,
         )
+
+        attempt.ownRuntime(tun)
+
+        startTUN = tun.start
 
         if PLATFORM != 'Linux':
             # Windows & macOS: bring up TUN first
-            if not startTUN():
+            try:
+                startTUN()
+            except RuntimeStartError:
                 return abortStart(f'core {Tun2socks.name()} start failed')
 
         # Handle user defined settings
@@ -1730,56 +1713,43 @@ class ConnectionManager(Mixins.CleanupOnExit):
                     return abortStart()
 
             # Now bring up TUN
-            if not startTUN():
+            try:
+                startTUN()
+            except RuntimeStartError:
                 return abortStart(f'core {Tun2socks.name()} start failed')
 
         return True
 
     def allRunning(self) -> bool:
         """Return whether every managed core runtime is running."""
-        return all(runtime.isAlive() for runtime in self.runtimes)
+        return all(runtime.isRunning() for runtime in self.runtimes)
 
     def anyRunning(self) -> bool:
         """Return whether any managed core runtime is running."""
-        return any(runtime.isAlive() for runtime in self.runtimes)
-
-    @staticmethod
-    def _stopAndDisposeRuntime(runtime):
-        """Stop and dispose one exact runtime without changing an owner list."""
-        try:
-            if isinstance(runtime, CoreRuntime):
-                runtime.stop()
-        except Exception as ex:
-            # Any non-exit exceptions
-
-            # Cleanup must continue for the remaining attempt resources.
-            logger.error(f'error stopping core runtime: {ex}')
-        finally:
-            dispose = getattr(runtime, 'dispose', None)
-
-            if callable(dispose):
-                try:
-                    dispose()
-                except Exception as ex:
-                    # Any non-exit exceptions
-
-                    logger.error(f'error disposing core runtime: {ex}')
+        return any(runtime.isRunning() for runtime in self.runtimes)
 
     def _releaseRuntime(self, runtime):
         """Stop, dispose, and forget one exact runtime owned by this manager."""
-        self._stopAndDisposeRuntime(runtime)
+        lease = next(
+            (lease for lease in self._leases if lease.runtime is runtime),
+            None,
+        )
 
-        try:
-            self.runtimes.remove(runtime)
-        except ValueError:
-            pass
+        if lease is None:
+            return
+
+        lease.release()
+
+        self._leases.remove(lease)
 
     def stopAll(self):
         """Stop every managed proxy-core and TUN runtime."""
         self.cancelStart()
 
-        for runtime in reversed(list(self.runtimes)):
-            self._releaseRuntime(runtime)
+        for lease in reversed(self._leases):
+            lease.release()
+
+        self._leases.clear()
 
     def cleanup(self):
         """Release resources owned by the core manager."""

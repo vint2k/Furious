@@ -26,6 +26,7 @@ from Furious.Controllers.ConnectionController import (
 from Furious.Controllers.RoutingController import RoutingController
 from Furious.Controllers.SettingsController import SettingsController
 from Furious.Frozenlib import AppBinarySettings, AppSettings
+from Furious.Interface import RuntimeExit, RuntimeExitReason
 from Furious.Models import CoreConfiguration, ServerProfile
 from Furious.Service.LogManager import LogManager
 
@@ -280,7 +281,10 @@ class ConnectionControllerTest(unittest.TestCase):
             controller._startConnecting()
 
             with mock.patch('Furious.Controllers.ConnectionController.SystemProxy.off'):
-                controller.coreExitCallback(process, 61)
+                controller.coreExitCallback(
+                    process,
+                    RuntimeExit(61, RuntimeExitReason.Unexpected),
+                )
                 controller._callActionFromQueue()
 
             self.assertEqual(controller.state, ConnectionState.Disconnected)
@@ -389,6 +393,41 @@ class ConnectionControllerTest(unittest.TestCase):
                 self.assertTrue(controller.isConnected())
                 proxySet.assert_called_once()
                 self.assertTrue(controller.startDisconnection())
+
+            controller.deleteLater()
+
+    def testAsyncSemanticStartFailureDoesNotCollapseToUnknownError(self):
+        """Preserve one manager-provided semantic error through presentation."""
+        with isolatedSettings():
+            core = FixtureAsyncCoreManager()
+            controller = ConnectionController(
+                coreManager=core,
+                updatesManager=FixtureUpdatesManager(),
+            )
+            errors = []
+            controller.errorOccurred.connect(errors.append)
+
+            with (
+                mock.patch('Furious.Controllers.ConnectionController.SystemProxy.off'),
+                mock.patch(
+                    'Furious.Controllers.ConnectionController._',
+                    side_effect=lambda text: text,
+                ),
+            ):
+                self.assertTrue(controller.startConnection(self.profile))
+                operation = core.operations[0][0]
+                operation.fail(
+                    'Invalid server configuration',
+                    'Fixture Core exited during startup with code 23',
+                )
+
+            self.assertEqual(controller.state, ConnectionState.Disconnected)
+            self.assertEqual(len(errors), 1)
+            self.assertEqual(
+                errors[0].message,
+                'Fixture Core: Invalid server configuration',
+            )
+            self.assertNotIn('Unknown error', errors[0].message)
 
             controller.deleteLater()
 

@@ -296,6 +296,8 @@ class ConnectionController(QtCore.QObject):
                     ),
                 )
             except Exception as ex:
+                # Any non-exit exceptions
+
                 logger.error(f'failed to schedule core manager startup: {ex}')
 
                 return self._failConnection(
@@ -304,6 +306,7 @@ class ConnectionController(QtCore.QObject):
                 )
 
             self._startOperation = operation
+
             connectWeakly(
                 operation.succeeded,
                 self,
@@ -483,11 +486,15 @@ class ConnectionController(QtCore.QObject):
         try:
             SystemProxy.off()
         except Exception as ex:
+            # Any non-exit exceptions
+
             logger.error(f'failed to turn off system proxy: {ex}')
 
         try:
             self._coreManager.stopAll()
         except Exception as ex:
+            # Any non-exit exceptions
+
             # Always complete the state transition. A cleanup failure must not
             # strand every connection UI in the disabled Disconnecting state.
             logger.error(f'failed to stop connection runtime: {ex}')
@@ -580,8 +587,8 @@ class ConnectionController(QtCore.QObject):
         if callable(action):
             action()
 
-    def coreExitCallback(self, core: CoreRuntime, exitcode: int):
-        """Translate a core exit into a queued lifecycle operation."""
+    def coreExitCallback(self, core: CoreRuntime, event: RuntimeExit):
+        """Queue one already interpreted committed-runtime exit."""
 
         def putItem(item):
             """Queue an operation without allowing worker failures to escape."""
@@ -592,22 +599,17 @@ class ConnectionController(QtCore.QObject):
 
                 pass
 
-        if exitcode == CoreRuntime.ExitCode.SystemShuttingDown.value:
+        if not event.unexpected:
             return None
 
-        if exitcode == CoreRuntime.ExitCode.ConfigurationError.value:
-            message = f'{core.name()}: ' + _('Invalid server configuration')
-        elif exitcode == CoreRuntime.ExitCode.ServerStartFailure.value:
-            message = f'{core.name()}: ' + _('Failed to start core')
-        else:
-            pluginMessage = getPluginRegistry().coreExitMessage(core, exitcode)
+        message = f'{core.name()}: ' + _(event.message)
 
-            message = (
-                f'{core.name()}: ' + _(pluginMessage)
-                if pluginMessage
-                else f'{core.name()}: ' + _('Core terminated unexpectedly')
+        putItem(
+            functools.partial(
+                self._failConnection,
+                message,
+                f'raw exit code={event.code}; reason={event.reason.value}',
             )
-
-        putItem(functools.partial(self._failConnection, message))
+        )
 
         return None

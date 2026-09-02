@@ -33,8 +33,8 @@ from .API import (
     ActionProvider,
     CapabilityKind,
     CoreRuntimeFactory,
-    CoreRuntimeLaunch,
     CoreRuntimeRequest,
+    PreparedRuntime,
     FuriousPlugin,
     PluginCapability,
     PluginContext,
@@ -61,8 +61,6 @@ __all__ = [
 ]
 
 PLUGIN_ENTRY_POINT_GROUP = 'furious.plugins'
-SUPPORTED_PLUGIN_API_VERSIONS = (PLUGIN_API_VERSION,)
-
 logger = logging.getLogger(__name__)
 
 
@@ -164,10 +162,10 @@ class PluginRegistry:
         if not isinstance(plugin, FuriousPlugin):
             raise TypeError('plugin must be a FuriousPlugin instance')
 
-        if plugin.apiVersion not in SUPPORTED_PLUGIN_API_VERSIONS:
+        if plugin.apiVersion != PLUGIN_API_VERSION:
             raise ValueError(
                 f'plugin API {plugin.apiVersion!r} is not supported; '
-                f'expected one of {SUPPORTED_PLUGIN_API_VERSIONS!r}'
+                f'expected {PLUGIN_API_VERSION!r}'
             )
 
         pluginMetadata = plugin.pluginMetadata()
@@ -1133,10 +1131,8 @@ class PluginRegistry:
         if launch is None:
             return None
 
-        if not isinstance(launch, CoreRuntimeLaunch):
-            raise TypeError(
-                'core runtime factory must return a CoreRuntimeLaunch value'
-            )
+        if not isinstance(launch, PreparedRuntime):
+            raise TypeError('core runtime factory must return a PreparedRuntime value')
 
         runtimeTypes = _runtimeTypes(factory)
 
@@ -1155,11 +1151,12 @@ class PluginRegistry:
         try:
             launch = self.createCoreRuntime(config, routing, **kwargs)
 
-            return (
-                (launch.runtime, launch.start())
-                if launch is not None
-                else (None, False)
-            )
+            if launch is None:
+                return None, False
+
+            launch.start()
+
+            return launch.runtime, True
         except Exception as ex:
             # Any non-exit exceptions
 
@@ -1279,24 +1276,6 @@ class PluginRegistry:
                 )
 
         return tuple(filter(None, patterns))
-
-    def coreExitMessage(self, core, exitcode: int):
-        """Return the owning factory's special exit message, if any."""
-        factory = self.runtimeFactoryFor(core)
-
-        if factory is None:
-            return None
-
-        try:
-            return factory.coreExitMessage(core, exitcode)
-        except Exception as ex:
-            # Any non-exit exceptions
-
-            logger.error(
-                f'failed to interpret core exit for {factory.factoryId!r}: {ex}'
-            )
-
-            return None
 
     def afterConnected(self, httpProxy=None):
         """Notify every core-runtime factory after a connection succeeds."""

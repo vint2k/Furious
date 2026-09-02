@@ -24,12 +24,12 @@ from .API import (
     ActionProvider,
     CapabilityKind,
     CoreRuntimeFactory,
-    CoreRuntimeLaunch,
     CoreRuntimeRequest,
     CoreRuntimeStartup,
     FuriousPlugin,
     NavigationPageDescriptor,
     NavigationPageProvider,
+    PreparedRuntime,
     PluginCapability,
     PluginContext,
     PluginMetadata,
@@ -66,6 +66,7 @@ from .Registry import (
     initializePluginRegistry,
     registerPlugin,
 )
+from .Runtime import serializeRuntimeConfiguration
 
 __all__ = [
     'PLUGIN_API_VERSION',
@@ -73,12 +74,12 @@ __all__ = [
     'ActionProvider',
     'CapabilityKind',
     'CoreRuntimeFactory',
-    'CoreRuntimeLaunch',
     'CoreRuntimeRequest',
     'CoreRuntimeStartup',
     'FuriousPlugin',
     'NavigationPageDescriptor',
     'NavigationPageProvider',
+    'PreparedRuntime',
     'PluginCapability',
     'PluginContext',
     'PluginRegistry',
@@ -105,6 +106,7 @@ __all__ = [
     'configurationFromMapping',
     'exportConfiguration',
     'getPluginRegistry',
+    'serializeRuntimeConfiguration',
     'initializePluginRegistry',
     'profileFromAny',
     'profileFromMapping',

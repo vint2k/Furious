@@ -21,12 +21,22 @@ from __future__ import annotations
 
 from .Application import ApplicationRunner
 from .Editor import EditorBinding, EditorWidgetBinding
-from .Runtime import CoreRuntime
+from .Runtime import (
+    CoreRuntime,
+    RuntimeExit,
+    RuntimeExitReason,
+    RuntimeStartError,
+    RuntimeState,
+)
 from .Storage import StorageBackend
 
 __all__ = [
     'ApplicationRunner',
     'CoreRuntime',
+    'RuntimeExit',
+    'RuntimeExitReason',
+    'RuntimeStartError',
+    'RuntimeState',
     'EditorBinding',
     'EditorWidgetBinding',
     'StorageBackend',

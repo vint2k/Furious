@@ -24,7 +24,6 @@ from Furious.Models import CoreConfiguration
 from Furious.Plugins.API import (
     CapabilityKind,
     CoreRuntimeFactory,
-    CoreRuntimeLaunch,
     CoreRuntimeRequest,
     FuriousPlugin,
     PluginMetadata,
@@ -32,6 +31,7 @@ from Furious.Plugins.API import (
     ProtocolEditorProvider,
     ProtocolHandler,
     ProtocolParseResult,
+    PreparedRuntime,
     SubscriptionDecoder,
     SubscriptionItem,
     SubscriptionResult,
@@ -137,17 +137,18 @@ class FixtureEditorProvider(ProtocolEditorProvider):
 
 
 class FixtureCoreRuntime:
-    """Record start calls made through CoreRuntimeLaunch."""
+    """Record one zero-argument start of a prepared runtime."""
 
-    def __init__(self):
-        """Initialize an empty call history."""
+    def __init__(self, configuration, arguments=(), options=None):
+        """Retain immutable preparation inputs and initialize call history."""
+        self.configuration = configuration
+        self.arguments = tuple(arguments)
+        self.options = dict(options or {})
         self.calls = []
 
-    def start(self, configuration, *args, **kwargs):
-        """Record prepared launch values and report success."""
-        self.calls.append((configuration, args, kwargs))
-
-        return True
+    def start(self):
+        """Record one zero-argument start using prepared values."""
+        self.calls.append((self.configuration, self.arguments, self.options))
 
 
 class FixtureCoreRuntimeFactory(CoreRuntimeFactory):
@@ -162,11 +163,12 @@ class FixtureCoreRuntimeFactory(CoreRuntimeFactory):
         if not isinstance(request.configuration, FixtureConfiguration):
             return None
 
-        return CoreRuntimeLaunch(
-            FixtureCoreRuntime(),
-            request.configuration,
-            ('prepared',),
-            {'routing': request.routing},
+        return PreparedRuntime(
+            FixtureCoreRuntime(
+                request.configuration,
+                ('prepared',),
+                {'routing': request.routing},
+            )
         )
 
 
@@ -194,6 +196,7 @@ class FixtureDecoder(SubscriptionDecoder):
 class FixturePlugin(FuriousPlugin):
     """Bundle representative capabilities for registry tests."""
 
+    apiVersion = 3
     metadata = PluginMetadata('tests.fixture', 'Fixture Plugin')
     capabilities = (
         FixtureProtocolHandler(),
@@ -435,17 +438,57 @@ class PluginRegistryTest(unittest.TestCase):
         self.assertNotIn('fixture://', diagnostics)
 
     def testConfigurationAndCoreRuntimeFactories(self):
-        """Build normalized configurations and start one prepared runtime."""
+        """Launch one prepared API-v3 runtime without a compatibility adapter."""
         config = self.registry.configFromDict({'type': 'fixture', 'value': 'node'})
         launch = self.registry.createCoreRuntime(config, 'direct')
 
         self.assertIsInstance(config, FixtureConfiguration)
         self.assertIsInstance(launch.runtime, FixtureCoreRuntime)
-        self.assertTrue(launch.start())
+        self.assertIsNone(launch.start())
         self.assertEqual(
             launch.runtime.calls,
             [(config, ('prepared',), {'routing': 'direct'})],
         )
+
+    def testRegistryRejectsAnotherPluginApiVersion(self):
+        """Keep API v3 as the one in-place contract without a compatibility range."""
+
+        class VersionFourPlugin(FuriousPlugin):
+            apiVersion = 4
+            metadata = PluginMetadata('tests.version-four', 'Version four')
+            capabilities = tuple()
+
+        registry = PluginRegistry()
+
+        with self.assertRaisesRegex(ValueError, "expected 3"):
+            registry.register(VersionFourPlugin())
+
+    def testRuntimeFactoryRejectsAnUnpreparedRuntimeShape(self):
+        """Require the sole API-v3 factory result instead of adapting alternatives."""
+
+        class UnpreparedFactory(CoreRuntimeFactory):
+            factoryId = 'unprepared.runtime'
+            configurationTypes = (FixtureConfiguration,)
+            runtimeTypes = (FixtureCoreRuntime,)
+
+            def create(self, request: CoreRuntimeRequest):
+                return FixtureCoreRuntime(request.configuration)
+
+        class UnpreparedPlugin(FuriousPlugin):
+            metadata = PluginMetadata('tests.unprepared', 'Unprepared Plugin')
+            capabilities = (UnpreparedFactory(),)
+
+        registry = PluginRegistry()
+        registry.register(UnpreparedPlugin())
+
+        try:
+            with self.assertRaisesRegex(TypeError, 'must return a PreparedRuntime'):
+                registry.createCoreRuntime(
+                    FixtureConfiguration({'type': 'fixture'}),
+                    'direct',
+                )
+        finally:
+            registry.shutdown()
 
     def testSubscriptionImportSeparatesMetadataAndConnection(self):
         """Convert decoder items into managed profiles with stable identities."""
@@ -617,10 +660,10 @@ class PluginFailureIsolationTest(unittest.TestCase):
         """Transfer a partially started runtime to the connection transaction."""
 
         class RaisingStartRuntime(FixtureCoreRuntime):
-            def start(self, configuration, *args, **kwargs):
+            def start(self):
                 raise RuntimeError('start fixture')
 
-        runtime = RaisingStartRuntime()
+        runtime = RaisingStartRuntime(FixtureConfiguration({'type': 'fixture'}))
 
         class RaisingStartFactory(CoreRuntimeFactory):
             factoryId = 'raising-start-factory'
@@ -628,7 +671,7 @@ class PluginFailureIsolationTest(unittest.TestCase):
             runtimeTypes = (RaisingStartRuntime,)
 
             def create(self, request: CoreRuntimeRequest):
-                return CoreRuntimeLaunch(runtime, request.configuration)
+                return PreparedRuntime(runtime)
 
         class RaisingStartPlugin(FuriousPlugin):
             metadata = PluginMetadata(

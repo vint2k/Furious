@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from Furious.Frozenlib import *
 from Furious.Plugins.API import *
+from Furious.Plugins.Runtime import serializeRuntimeConfiguration
 from Furious.Backends.Configuration import *
 
 from .Process import Hysteria2
@@ -201,17 +202,16 @@ class Hysteria2CoreRuntimeFactory(CoreRuntimeFactory):
             logger.info(f'core {Hysteria2.name()} configured')
 
         runtime = Hysteria2(
+            serializeRuntimeConfiguration(request.configuration, Hysteria2.name()),
             exitCallback=request.exitCallback,
             msgCallback=request.messageCallback,
         )
 
         setattr(runtime, 'hysteria2StatsTarget', configuredHysteria2StatsTarget())
 
-        return CoreRuntimeLaunch(
+        return PreparedRuntime(
             runtime,
-            request.configuration,
-            options=request.options,
-            startup=CoreRuntimeStartup(endpoint=request.configuration.httpProxy()),
+            readiness=CoreRuntimeStartup(endpoint=request.configuration.httpProxy()),
         )
 
     def prepareDownloadTest(self, config, port: int):

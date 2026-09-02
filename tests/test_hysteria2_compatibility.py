@@ -35,6 +35,7 @@ from Furious.Backends.Hysteria2.TunSettingsDialog import (
 )
 from Furious.Frozenlib import AppSettings, Mixins
 from Furious.Models.Profile import ServerProfile
+from Furious.Plugins.Runtime import serializeRuntimeConfiguration
 from Furious.Qt import AppStyleSheet
 
 from tests.support import (
@@ -824,10 +825,12 @@ class Hysteria2CompatibilityTest(unittest.TestCase):
     def testRuntimeLaunchReceivesAuthoritativeFullJSON(self):
         """Submit target-version fields directly to startFromJSON's boundary."""
         configuration = ConfigHysteria2(self.fullConfiguration())
-        runtime = Hysteria2()
+        runtime = Hysteria2(
+            serializeRuntimeConfiguration(configuration, Hysteria2.name())
+        )
 
         try:
-            launchSpec = runtime.launchSpec(configuration)
+            launchSpec = runtime._launch
             submitted = json.loads(launchSpec.args[0])
 
             self.assertEqual(submitted, configuration)

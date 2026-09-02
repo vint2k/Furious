@@ -117,7 +117,7 @@ def startXrayCore(jsonString: str, msgQueue: multiprocessing.Queue):
                     stream.close()
 
 
-class XrayCore(CoreProcessWorker):
+class XrayCore(MultiprocessingRuntime):
     """Manage the embedded Xray core subprocess."""
 
     class ExitCode(Enum):
@@ -129,9 +129,16 @@ class XrayCore(CoreProcessWorker):
         # Windows shutting down
         SystemShuttingDown = 0x40010004
 
-    def __init__(self, **kwargs):
-        """Initialize the XrayCore."""
-        super().__init__(**kwargs)
+    def __init__(self, configuration: str, **kwargs):
+        """Initialize a fully prepared Xray execution runtime."""
+        super().__init__(
+            lambda output: ProcessLaunchSpec(
+                target=startXrayCore,
+                args=(configuration, output),
+                processOptions=kwargs.pop('processOptions', {}),
+            ),
+            **kwargs,
+        )
 
     @staticmethod
     def name() -> str:
@@ -149,30 +156,3 @@ class XrayCore(CoreProcessWorker):
             # Any non-exit exceptions
 
             return '0.0.0'
-
-    def launchSpec(
-        self, config: Union[str, CoreConfiguration, dict], **kwargs
-    ) -> Union[CoreLaunchSpec, None]:
-        """Build the child-process launch specification."""
-        param = self.toJSONString(config)
-
-        if not param:
-            return None
-
-        return CoreLaunchSpec(
-            target=startXrayCore,
-            args=(
-                param,
-                self.msgQueue,
-            ),
-            processKwargs=kwargs,
-        )
-
-    def start(self, config: Union[str, CoreConfiguration, dict], **kwargs) -> bool:
-        """Start the Xray core."""
-        launchSpec = self.launchSpec(config, **kwargs)
-
-        if launchSpec is None:
-            return False
-
-        return self.startWithSpec(launchSpec)

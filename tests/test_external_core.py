@@ -20,15 +20,28 @@
 from __future__ import annotations
 
 from Furious.Backends.ExternalCore import ConfigExternalCore, ExternalCoreProcess
-from Furious.Backends.ExternalCore.Plugin import ExternalCorePlugin
-from Furious.Plugins.API import SubscriptionItem, SubscriptionResult
+from Furious.Backends.ExternalCore.Plugin import (
+    ExternalCorePlugin,
+    ExternalCoreRuntimeFactory,
+)
+from Furious.Interface import CoreRuntime, RuntimeExit, RuntimeStartError
+from Furious.Plugins.API import (
+    CoreRuntimeRequest,
+    SubscriptionItem,
+    SubscriptionResult,
+)
 from Furious.Plugins.Registry import PluginRegistry
 from Furious.Service.ConnectionManager import ConnectionManager
 from Furious.Service.DnsResolver import DnsResolver
+from Furious.Service.RuntimeLease import RuntimeEventRouter, RuntimeLease
 from Furious.Service.SubscriptionImporter import (
     SubscriptionImportService,
     SubscriptionSource,
 )
+
+from PySide6 import QtCore
+
+from tests.support import application, waitFor as waitForQt
 
 import os
 import sys
@@ -42,6 +55,17 @@ import unittest
 from unittest import mock
 
 from pathlib import Path
+
+
+class _RuntimeOwner(QtCore.QObject):
+    """Record routed External Core exits and their consuming Qt thread."""
+
+    def __init__(self):
+        super().__init__()
+        self.events = []
+
+    def runtimeExited(self, runtime, event):
+        self.events.append((runtime, event, QtCore.QThread.currentThread()))
 
 
 class ExternalCoreProcessTest(unittest.TestCase):
@@ -110,15 +134,15 @@ class ExternalCoreProcessTest(unittest.TestCase):
                 'print("stderr fixture",file=sys.stderr,flush=True); '
                 'time.sleep(60)'
             )
-            messages = []
-            runtime = ExternalCoreProcess(msgCallback=messages.append)
             config = self.configuration(
                 ['-u', '-c', code, str(resultPath), payload],
                 directory,
                 {'FURIOUS_EXTERNAL_TEST': 'Unicode ✓'},
             )
+            messages = []
+            runtime = ExternalCoreProcess(config, msgCallback=messages.append)
 
-            self.assertTrue(runtime.start(config))
+            runtime.start()
             self.assertTrue(self.waitFor(resultPath.exists))
             self.assertTrue(
                 self.waitFor(
@@ -137,7 +161,7 @@ class ExternalCoreProcessTest(unittest.TestCase):
 
             runtime.stop()
 
-            self.assertFalse(runtime.isAlive())
+            self.assertFalse(runtime.isRunning())
             self.assertFalse(runtime._readerThreads)
 
     def testReaderBatchesCompleteLinesAndPreservesTrailingPartialLine(self):
@@ -157,7 +181,7 @@ class ExternalCoreProcessTest(unittest.TestCase):
                 self.batches.append(tuple(messages))
 
         callback = BatchCallback()
-        runtime = ExternalCoreProcess(msgCallback=callback)
+        runtime = ExternalCoreProcess(ConfigExternalCore(), msgCallback=callback)
         stream = mock.Mock()
         stream.fileno.return_value = 123
 
@@ -180,40 +204,55 @@ class ExternalCoreProcessTest(unittest.TestCase):
             missing = self.configuration([], directory)
             missing['executable'] = str(Path(directory) / 'missing executable')
 
-            runtime = ExternalCoreProcess()
+            runtime = ExternalCoreProcess(missing)
 
-            self.assertFalse(runtime.start(missing))
-            self.assertEqual(runtime.startError(), 'Executable does not exist')
+            with self.assertRaises(RuntimeStartError) as raised:
+                runtime.start()
+
+            self.assertEqual(raised.exception.message, 'Executable does not exist')
+            runtime.dispose()
 
             invalidCwd = self.configuration([], directory)
             invalidCwd['workingDirectory'] = str(Path(directory) / 'missing cwd')
 
-            self.assertFalse(runtime.start(invalidCwd))
+            runtime = ExternalCoreProcess(invalidCwd)
+
+            with self.assertRaises(RuntimeStartError) as raised:
+                runtime.start()
+
             self.assertEqual(
-                runtime.startError(),
+                raised.exception.message,
                 'Working directory does not exist',
             )
+            runtime.dispose()
 
             invalidEnvironment = self.configuration([], directory)
             invalidEnvironment['environment'] = ['TOKEN=value']
 
-            self.assertFalse(runtime.start(invalidEnvironment))
+            runtime = ExternalCoreProcess(invalidEnvironment)
+
+            with self.assertRaises(RuntimeStartError) as raised:
+                runtime.start()
+
             self.assertEqual(
-                runtime.startError(),
+                raised.exception.message,
                 'Environment overrides must be a mapping',
             )
+            runtime.dispose()
 
             earlyExit = self.configuration(
                 ['-c', 'import sys; sys.exit(7)'],
                 directory,
             )
 
-            self.assertFalse(runtime.start(earlyExit))
-            self.assertEqual(runtime.lastExitCode, 7)
-            self.assertEqual(
-                runtime.startError(),
-                'External core exited during startup',
+            exits = []
+            runtime = ExternalCoreProcess(
+                earlyExit,
+                exitCallback=lambda _runtime, event: exits.append(event),
             )
+            runtime.start()
+            self.assertTrue(self.waitFor(lambda: bool(exits)))
+            self.assertEqual(exits[0].code, 7)
 
             runtime.dispose()
 
@@ -252,6 +291,19 @@ class ExternalCoreProcessTest(unittest.TestCase):
                 self.assertNotIn(missingAddressError, config.validateProcess())
 
             registry.shutdown()
+
+    def testFactoryPublishesTheConfiguredProxyReadinessBoundary(self):
+        """Keep endpoint readiness in startup orchestration, not process start."""
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            config = self.configuration([], directory)
+            factory = ExternalCoreRuntimeFactory()
+            request = CoreRuntimeRequest(config, '')
+            prepared = factory.create(request)
+
+            try:
+                self.assertEqual(prepared.readiness.endpoint, config.httpProxy())
+            finally:
+                prepared.runtime.dispose()
 
     def testDisabledApplicationTun2socksSkipsTheHostTunRuntime(self):
         """Do not enter ConnectionManager's TUN path for an opted-out profile."""
@@ -311,6 +363,7 @@ class ExternalCoreProcessTest(unittest.TestCase):
             registry.usesApplicationTun2socks.return_value = True
             dnsResolver = mock.Mock()
             dnsResolver.resolve.return_value = (True, [])
+            tunRuntime = mock.Mock(spec=CoreRuntime)
 
             manager = NoCoreRuntimeConnectionManager(dnsResolver=dnsResolver)
 
@@ -350,7 +403,10 @@ class ExternalCoreProcessTest(unittest.TestCase):
                 mock.patch(
                     'Furious.Service.ConnectionManager.SystemRoutingTable.delete'
                 ),
-                mock.patch('Furious.Service.ConnectionManager.Tun2socks'),
+                mock.patch(
+                    'Furious.Service.ConnectionManager.Tun2socks',
+                    return_value=tunRuntime,
+                ),
             ):
                 self.assertFalse(manager.start(config, '', deepcopy=False))
 
@@ -366,12 +422,14 @@ class ExternalCoreProcessTest(unittest.TestCase):
             config = self.configuration([], directory)
             config['useApplicationTun2socks'] = True
 
-            runtime = ExternalCoreProcess()
+            runtime = ExternalCoreProcess(config)
 
-            self.assertFalse(runtime.start(config))
+            with self.assertRaises(RuntimeStartError) as raised:
+                runtime.start()
+
             self.assertIsNone(runtime.process)
             self.assertEqual(
-                runtime.startError(),
+                raised.exception.message,
                 'TUN remote address is required when application '
                 'tun2socks is enabled',
             )
@@ -384,20 +442,22 @@ class ExternalCoreProcessTest(unittest.TestCase):
             callbackEvent = threading.Event()
             callbackValues = []
 
-            def exited(runtime, exitCode):
+            def exited(runtime, event):
                 """Record one unexpected process exit from the watcher thread."""
-                callbackValues.append((runtime, exitCode))
+                callbackValues.append((runtime, event))
                 callbackEvent.set()
 
-            runtime = ExternalCoreProcess(exitCallback=exited)
             config = self.configuration(
                 ['-c', 'import time,sys; time.sleep(.5); sys.exit(9)'],
                 directory,
             )
+            runtime = ExternalCoreProcess(config, exitCallback=exited)
 
-            self.assertTrue(runtime.start(config))
+            runtime.start()
             self.assertTrue(callbackEvent.wait(5))
-            self.assertEqual(callbackValues, [(runtime, 9)])
+            self.assertIs(callbackValues[0][0], runtime)
+            self.assertIsInstance(callbackValues[0][1], RuntimeExit)
+            self.assertEqual(callbackValues[0][1].code, 9)
 
             runtime.stop()
 
@@ -407,15 +467,43 @@ class ExternalCoreProcessTest(unittest.TestCase):
             )
 
             for _index in range(3):
-                self.assertTrue(runtime.start(longRunning))
+                current = ExternalCoreProcess(longRunning)
+                current.start()
+                current.stop()
 
-                runtime.stop()
-
-                self.assertFalse(runtime.isAlive())
-                self.assertFalse(runtime._readerThreads)
-                self.assertIsNone(runtime._watcherThread)
+                self.assertFalse(current.isRunning())
+                self.assertFalse(current._readerThreads)
+                self.assertIsNone(current._watcherThread)
+                current.dispose()
 
             runtime.dispose()
+
+            self.assertIsNone(runtime.process)
+            self.assertIsNone(runtime._watcherThread)
+
+    def testWatcherExitIsRoutedToTheQtOwnerThread(self):
+        """Never let the subprocess watcher manipulate a Qt owner directly."""
+        app = application()
+
+        with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
+            config = self.configuration(
+                ['-c', 'import sys,time; time.sleep(.1); sys.exit(17)'],
+                directory,
+            )
+            owner = _RuntimeOwner()
+            router = RuntimeEventRouter()
+            runtime = ExternalCoreProcess(config, exitCallback=router.publish)
+            router.attach(runtime, owner)
+            lease = RuntimeLease(runtime, router)
+
+            runtime.start()
+
+            self.assertTrue(waitForQt(lambda: bool(owner.events), timeout=5))
+            self.assertIs(owner.events[0][0], runtime)
+            self.assertEqual(owner.events[0][1].code, 17)
+            self.assertIs(owner.events[0][2], app.thread())
+
+            lease.release()
 
     @unittest.skipUnless(os.name == 'nt', 'Windows executable hard-link coverage')
     def testExecutablePathContainingSpaces(self):
@@ -433,13 +521,13 @@ class ExternalCoreProcessTest(unittest.TestCase):
             )
             config['executable'] = str(executable)
 
-            runtime = ExternalCoreProcess()
+            runtime = ExternalCoreProcess(config)
 
-            self.assertTrue(runtime.start(config))
+            runtime.start()
 
             runtime.stop()
 
-            self.assertFalse(runtime.isAlive())
+            self.assertFalse(runtime.isRunning())
 
     def testSubscriptionCannotIntroduceAnExecutableProfile(self):
         """Reject executable configurations received from subscription data."""

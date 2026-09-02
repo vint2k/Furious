@@ -19,8 +19,13 @@
 
 from __future__ import annotations
 
-from Furious.Core import CoreProcessState
-from Furious.Interface import CoreRuntime
+from Furious.Interface import (
+    CoreRuntime,
+    RuntimeExit,
+    RuntimeExitReason,
+    RuntimeStartError,
+    RuntimeState,
+)
 
 from .Configuration import ConfigExternalCore
 
@@ -41,19 +46,18 @@ logger = logging.getLogger(__name__)
 class ExternalCoreProcess(CoreRuntime):
     """Manage one direct external process and its output-reader threads."""
 
-    StartupObservationTimeout = 0.25
     ForcedShutdownTimeout = 5.0
     MaximumPendingOutput = 65536
 
-    def __init__(self, *, exitCallback=None, msgCallback=None):
-        """Initialize an idle process runtime with explicit callback ownership."""
+    def __init__(self, configuration, *, exitCallback=None, msgCallback=None):
+        """Initialize a fully prepared external-process runtime."""
         super().__init__(exitCallback)
 
+        self._configuration = configuration
         self._messageCallback = msgCallback
         self._process: Optional[subprocess.Popen] = None
         self._readerThreads: list[threading.Thread] = []
         self._watcherThread: Optional[threading.Thread] = None
-        self._state = CoreProcessState.Idle
         self._lastExitCode = None
         self._shutdownTimeout = 5.0
         self._stopping = threading.Event()
@@ -76,19 +80,13 @@ class ExternalCoreProcess(CoreRuntime):
             return self._process
 
     @property
-    def state(self) -> CoreProcessState:
-        """Return the current process lifecycle state."""
-        with self._lock:
-            return self._state
-
-    @property
     def lastExitCode(self):
         """Return the most recently observed process exit code."""
         with self._lock:
             return self._lastExitCode
 
-    def isAlive(self) -> bool:
-        """Return whether the configured external process is still running."""
+    def isRunning(self) -> bool:
+        """Passively report whether the external process is running."""
         process = self.process
 
         return process is not None and process.poll() is None
@@ -246,9 +244,7 @@ class ExternalCoreProcess(CoreRuntime):
             stopping = self._stopping.is_set()
 
             self._lastExitCode = exitCode
-            self._state = (
-                CoreProcessState.Exited if stopping else CoreProcessState.Failed
-            )
+            self.setState(RuntimeState.Exited if stopping else RuntimeState.Failed)
 
         if stopping:
             logger.info(f'external core process exited with code {exitCode}')
@@ -257,7 +253,7 @@ class ExternalCoreProcess(CoreRuntime):
 
         logger.error(f'external core process exited unexpectedly with code {exitCode}')
 
-        self.callExitCallback(exitCode)
+        self.publishExit(self.interpretExit(exitCode))
 
     def _startWatcher(self, process: subprocess.Popen):
         """Start the single process-reaping watcher thread."""
@@ -276,39 +272,54 @@ class ExternalCoreProcess(CoreRuntime):
 
         return {'start_new_session': True}
 
-    def start(self, config: ConfigExternalCore, **kwargs) -> bool:
-        """Validate and directly launch the configured executable."""
-        if not isinstance(config, ConfigExternalCore):
-            self.setStartError('Invalid External Core configuration')
+    def interpretExit(self, exitcode: int, *, requested: bool = False):
+        """Give an external program's unexpected exit one semantic message."""
+        if requested:
+            return super().interpretExit(exitcode, requested=True)
 
-            return False
+        return RuntimeExit(
+            exitcode,
+            RuntimeExitReason.Unexpected,
+            'External core exited unexpectedly',
+        )
+
+    def start(self):
+        """Validate and launch execution or raise ``RuntimeStartError``."""
+        config = self._configuration
+
+        if not isinstance(config, ConfigExternalCore):
+            raise RuntimeStartError(
+                'Invalid External Core configuration',
+                reason=RuntimeExitReason.InvalidConfiguration,
+            )
 
         if self.process is not None:
-            if self.isAlive():
+            if self.isRunning():
                 logger.warning(
                     'External Core is already running. Stop it before restart'
                 )
 
             self.stop()
 
-        self.clearStartError()
         self._stopping.clear()
 
         with self._lock:
-            self._state = CoreProcessState.Starting
+            self.setState(RuntimeState.Starting)
             self._lastExitCode = None
 
         errors = config.validateProcess()
 
         if errors:
-            self.setStartError(errors[0])
-
             logger.error(f'external core configuration is invalid: {"; ".join(errors)}')
 
             with self._lock:
-                self._state = CoreProcessState.Failed
+                self.setState(RuntimeState.Failed)
 
-            return False
+            raise RuntimeStartError(
+                errors[0],
+                reason=RuntimeExitReason.InvalidConfiguration,
+                details='; '.join(errors),
+            )
 
         command = config.command()
         cwd = str(config.get('workingDirectory', '')).strip()
@@ -337,52 +348,35 @@ class ExternalCoreProcess(CoreRuntime):
                 **self._creationOptions(),
             )
         except FileNotFoundError as ex:
-            self.setStartError('Executable does not exist')
-
             logger.error(f'failed to launch external core: {ex}')
+
+            error = RuntimeStartError('Executable does not exist', details=str(ex))
         except PermissionError as ex:
-            self.setStartError('Permission denied while launching external core')
-
             logger.error(f'failed to launch external core: {ex}')
+
+            error = RuntimeStartError(
+                'Permission denied while launching external core', details=str(ex)
+            )
         except OSError as ex:
-            self.setStartError('Failed to launch external core')
-
             logger.error(f'failed to launch external core: {ex}')
+
+            error = RuntimeStartError('Failed to launch external core', details=str(ex))
         else:
             with self._lock:
                 self._process = process
+                self.setState(RuntimeState.Alive)
 
             self._startReaders(process)
+            self._startWatcher(process)
 
-            try:
-                exitCode = process.wait(timeout=self.StartupObservationTimeout)
-            except subprocess.TimeoutExpired:
-                with self._lock:
-                    self._state = CoreProcessState.Running
+            logger.info(f'external core process started with PID {process.pid}')
 
-                logger.info(f'external core process started with PID {process.pid}')
-
-                self._startWatcher(process)
-
-                return True
-
-            self._joinReaders(process)
-            self.setStartError('External core exited during startup')
-
-            with self._lock:
-                self._lastExitCode = exitCode
-                self._state = CoreProcessState.Failed
-
-            logger.error(
-                f'external core process exited during startup with code {exitCode}'
-            )
-
-            return False
+            return
 
         with self._lock:
-            self._state = CoreProcessState.Failed
+            self.setState(RuntimeState.Failed)
 
-        return False
+        raise error
 
     @staticmethod
     def _waitForExit(process: subprocess.Popen, timeout: float) -> bool:
@@ -470,7 +464,7 @@ class ExternalCoreProcess(CoreRuntime):
         self._stopping.set()
 
         with self._lock:
-            self._state = CoreProcessState.Stopping
+            self.setState(RuntimeState.Stopping)
 
         if process.poll() is None:
             logger.info(f'requesting external core shutdown for PID {process.pid}')
@@ -509,11 +503,15 @@ class ExternalCoreProcess(CoreRuntime):
 
         with self._lock:
             self._lastExitCode = exitCode
-            self._state = CoreProcessState.Exited
+            self.setState(RuntimeState.Exited)
             self._process = None
 
     def dispose(self):
-        """Release all process, thread, and callback ownership."""
-        self.stop()
+        """Idempotently release process, thread, and callback ownership."""
+        if self.state is RuntimeState.Disposed:
+            return
+
         self._messageCallback = None
-        self._exitCallback = None
+        self.stop()
+
+        super().dispose()
