@@ -7,8 +7,10 @@
   every representative implementation and contract test before changing one; an implementation may strengthen a
   guarantee but cannot silently weaken it.
 - `CoreRuntime` is mechanism-neutral: embedded multiprocessing, direct `subprocess`, or an in-process binding can satisfy
-  it. Preserve actionable `startError()`, callback/exit behavior, runtime identity, serialization diagnostics, and a
-  bounded idempotent stop/dispose path. Process/child terminology belongs only to implementations that own one.
+  it. It owns execution only: zero-argument start, passive liveness, typed terminal events, and bounded idempotent
+  stop/dispose. Preparation, serialization, readiness, and startup transactions belong outside this contract. Bind its
+  event sink once before start; raw exit interpretation occurs once at the concrete runtime boundary. Process/child
+  terminology belongs only to implementations that own one.
 - `StorageBackend.data()` deliberately exposes a live mutable collection for compatibility. Do not reinterpret it as a
   snapshot or introduce a second authoritative cache. Editor bindings map input to configuration and back; they do not
   decide runtime, persistence, or host policy.

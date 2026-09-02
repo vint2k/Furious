@@ -2,11 +2,13 @@
 
 - `Core` supplies shared multiprocessing runtime machinery, bounded output transport, and application tun2socks. External
   Core owns its separate direct `subprocess.Popen`; neither layer owns controller, repository, UI, or protocol policy.
-- A launch spec is the validated spawn boundary, not semantic connection readiness. The asynchronous connection
-  transaction observes endpoints/process survival and commits later; retain synchronous waiting only as a compatibility
-  path where callers explicitly require it.
+- A launch spec describes only validated child construction, never semantic connection readiness. Runtime preparation
+  completes before construction; the asynchronous connection transaction observes endpoints/process survival and
+  commits later. Keep any synchronous waiting isolated as an explicit compatibility path.
 - A runtime owns and reaps its exact child, process handle, monitor/drain timers, queues, callbacks, and feeder resources.
   Stop is bounded, escalates only that child when needed, closes handles, and is safe after partial start or repetition.
+- Process-backed runtimes monitor and reap their own child, interpret a raw exit exactly once, and publish one typed exit
+  event. `isRunning()` is a passive execution-liveness query and must not consume or dispatch lifecycle events.
 - Child targets never touch Qt widgets. Output transport is non-blocking and bounded in message size, pending volume, and
   per-turn drain work; draining continues independently of Log-page visibility and backs off only when idle.
 - Parentless timers are acceptable only with a durable runtime owner and explicit disposal. Leaving the manager pool

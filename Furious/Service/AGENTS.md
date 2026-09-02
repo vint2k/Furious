@@ -18,6 +18,11 @@
   the primary runtime, resolve DNS, acquire optional tun2socks, mutate host networking in platform order, then commit.
   Failure/cancellation rolls back only attempt-owned runtimes and host changes. The synchronous start path is a
   compatibility boundary, not the default GUI mechanism.
+- Construct a runtime event router before asking a plugin to create its runtime. One lease owns the runtime/router from
+  acquisition through attempt ownership, commit, and reverse-order release; commit changes logical delivery without
+  replacing the runtime callback. Worker-thread exits are queued to the router's Qt thread, delivered at most once, and
+  suppressed after release. Execution liveness and endpoint/TUN readiness remain separate observations. A readiness
+  timeout never replaces a typed exit after execution has already stopped, even when that exit is still queued.
 - `HttpGetManager` owns reply/error/timeout cleanup. DNS recursion and external-input caches are bounded. Update,
   connectivity, endpoint, subscription, and asset requests own their exact reply and reject stale generations.
 - Subscription stages remain separate: decoders return neutral items; import constructs profiles/metadata;

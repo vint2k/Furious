@@ -39,7 +39,7 @@ strategy in an individual test.
 | --- | --- |
 | Configuration, profiles, migration, repositories | `test_models_and_services.py`, `test_repository_contracts.py` |
 | Generation log invariants, model fuzzing, concurrency, reclamation, complexity, and opt-in soak/latency probes | `test_log_manager_generation.py` |
-| Low-level application, runtime, editor, and storage contracts | `test_interface.py` |
+| Low-level application, runtime, lease/thread handoff, editor, and storage contracts | `test_interface.py`, `test_runtime_lifecycle.py` |
 | Application composition, asynchronous readiness/TUN startup, rollback, connection ownership, entry-point and crash boundaries | `test_architecture_refactors.py`, `test_connection_startup_async.py`, `test_application_process.py` |
 | Plugin registration, capability dispatch, factories, rollback, and Hysteria1 ownership | `test_plugin_architecture.py`, `test_hysteria1_protocol.py` |
 | Controller state and error transitions with injected runtimes | `test_controllers.py` |
