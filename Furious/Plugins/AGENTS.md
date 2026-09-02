@@ -1,5 +1,8 @@
 # Plugin guidance
 
+Inherit the root, package, and interface guides. This scope owns capability definitions, atomic registration, dispatch,
+and plugin lifecycle; concrete backend policy remains in each implementation.
+
 ## Contracts and registry
 
 - `Plugins.API` defines independently composable capabilities for protocols/editors, subscription decoding, runtime
@@ -25,6 +28,9 @@
   entry-point plugins; do not give bundled code hidden repository/UI side channels.
 - Evolve contracts additively when practical. Before a breaking change, inspect external discovery, compatibility
   exports, every bundled implementation, tests, and compiled inclusion; do not infer compatibility from built-ins alone.
+- A capability contract is generic only when an external plugin can satisfy it without importing private application
+  state. Backend-specific defaults, settings keys, document branches, and host assumptions stay behind the provider
+  rather than becoming undeclared registry requirements.
 - API-version-3 runtime factories return `PreparedRuntime` directly. The runtime is fully prepared before return,
   starts with zero arguments, raises typed startup failures, and exposes readiness separately; do not add legacy launch
   adapters, Boolean startup side channels, or alternate factory-result shapes.

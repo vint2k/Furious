@@ -1,5 +1,8 @@
 # Backend guidance
 
+Inherit the root, package, plugin, model, and service contracts. This scope adds rules shared by all bundled proxy
+backends without making the richest backend the generic default.
+
 ## Common backend contract
 
 - A backend plugin owns its configuration/document types, parsing/export, validation, editor factories, runtime factory,
@@ -24,6 +27,9 @@
   than permission to silently switch implementations.
 - A runtime owns its exact process/thread/readers/monitors and publishes an actionable start error. Stop/dispose is
   bounded, idempotent, and correct after partial acquisition.
+- Runtime factories follow the current plugin contract: fully prepare and return one owned launch whose zero-argument
+  start is separate from readiness observation. Do not hide readiness waits, Boolean success channels, or controller
+  policy inside a backend runtime.
 
 ## Backend scopes
 

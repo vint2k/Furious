@@ -1,5 +1,8 @@
 # External Core guidance
 
+Inherit the backend and plugin rules. This file preserves the intentionally different direct-subprocess scope for
+user-selected executables.
+
 ## Structured executable boundary
 
 - External Core represents one user-selected local executable, not an embedded protocol binding. Keep executable path,
@@ -15,6 +18,8 @@
 - One runtime owns its exact `Popen`, stdout/stderr pipes and readers, watcher, partial-line buffer, exit callback, and
   reaping path. Shutdown terminates that process, uses only platform-specific escalation for its PID when necessary,
   kills as a last resort, joins readers, and remains bounded and idempotent after partial startup.
+- Keep execution liveness, configured proxy endpoints, and semantic readiness distinct. An immediate or later exit is
+  interpreted once at this runtime boundary and retains actionable code/reason context for the shared startup workflow.
 - Application tun2socks is an explicit profile capability. It requires a usable SOCKS endpoint and a separate remote
   server address for bypass routing; an executable path is never a network destination, and this backend never invents
   native core TUN support. Subscription decoding must continue to reject executable profiles.

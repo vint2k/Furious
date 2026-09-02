@@ -1,5 +1,8 @@
 # Reusable widget guidance
 
+Inherit the root, package, and Qt guides. This scope covers reusable controls and model/view adapters below page
+composition; it does not own application workflows.
+
 ## Presentation and identity
 
 - Widgets present state below pages/windows. Prefer explicit controller/service/repository inputs and do not add new
@@ -22,6 +25,9 @@
 - Models, delegates, headers, menus, actions, animations, spinners, WebEngine/map objects, timers, workers, and replies
   each need one owner. Persistent widgets connect once and refresh state; visibility may pause rendering/animation, not
   application-level log draining, traffic collection, or other service ownership.
+- Model notifications describe the smallest real source mutation. Never use a reset or full repaint to hide incorrect
+  proxy/source mapping, stale indexes, or missing stable-identity restoration after insert, delete, move, filter, or
+  sort.
 - Verify sorted/filtered commands, notification ranges, identity-preserving move/delete, real keyboard focus and nested
   shortcuts, subscription/test cancellation, hidden-page rendering, exact cell updates, optional WebEngine fallback,
   and repeated cleanup to baseline. Update this guide when ownership moves; never move service orchestration back into

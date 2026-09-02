@@ -1,5 +1,8 @@
 # Bundled runtime data guidance
 
+Inherit the root and package guides. This scope exists for shipped runtime assets and their provenance; it is not an
+application-data or settings directory.
+
 ## Boundary and provenance
 
 - This directory ships application assets, not user state: Xray GeoIP/geosite data, Hysteria MMDB/ACL data, the local

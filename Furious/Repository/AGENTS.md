@@ -1,5 +1,8 @@
 # Repository guidance
 
+Inherit the root, package, interface, and model guides. This scope owns restoration, migration, ordering, and durable
+collection commits; workflows and presentation remain outside it.
+
 - Repositories restore, migrate, order, and persist profiles, subscriptions, routings, and TUN settings. They do not own
   network workflows, controller state, test schedulers, or presentation.
 - `Storage` owns one application-lifetime backend per collection and exposes live mutable collections for compatibility.
@@ -12,6 +15,8 @@
 - Stage fallible decode, migration, or reconciliation before deterministic mutation of the live collection. A
   subscription commit changes only that group: matched managed profiles retain stable object/profile identity and local
   metadata, removed profiles are marked stale, and indexes/order update atomically.
+- Persistence is part of the repository commit contract, not evidence that later host/controller side effects succeeded.
+  Callers report post-commit failures separately and must not claim the durable mutation rolled back when it did not.
 - Moving a profile between subscription displays does not automatically make it remotely managed; preserve the explicit
   distinction between local membership and synchronization ownership.
 - Verify legacy/current/unknown-field round trips, malformed roots, restore-failure preservation, ordering/stable

@@ -1,5 +1,8 @@
 # Hysteria 2 guidance
 
+Inherit the common backend and plugin rules. This scope owns Hysteria 2's nested upstream document, native-TUN
+capability, statistics, and editor projection.
+
 ## Native document and editor projection
 
 - The persisted Hysteria 2 client document is authoritative and is submitted to the embedded runtime. The GUI is a
@@ -17,6 +20,8 @@
   backend’s privilege and server-route-exclusion guarantees. Probe/download copies always remove native TUN.
 - Traffic-statistics targets, setting descriptors, and action providers are process-lifetime plugin capabilities;
   monitors, replies, dialogs, and runtimes created from them are request/transient objects and are never registry-owned.
+- Capability presence is independent: native TUN, statistics, actions, settings, routing, and protocol editing must
+  continue to work or fail through their own declared contracts rather than being inferred from the runtime type.
 - Verify nested sibling/default preservation, known and unknown values, obfuscation switching, URI/document equality,
   every native/application-TUN and resolution case, probe stripping, readiness/exit cleanup, statistics cancellation,
   and repeated transient editor/settings-dialog destruction. Keep this guide synchronized with verified upstream schema

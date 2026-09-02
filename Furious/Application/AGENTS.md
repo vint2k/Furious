@@ -1,11 +1,17 @@
 # Application composition guidance
 
+Inherit the root and package guides. This scope owns process-lifetime Qt composition and the boundary between the outer
+child-process supervisor and the inner application event loop.
+
 - `Furious.__main__` and `AppMainProcess` own the outer process/crash boundary; `DesktopApplication` owns the inner Qt
   composition. Keep those responsibilities separate and preserve semantic exit codes and original failure context.
 - Startup acquires singleton ownership before composing process-lifetime repositories, plugins, controllers, logging,
   host integration, UI, and optional restored connection. Register cleanup as each acquisition succeeds.
 - Partial startup, normal exit, signals, and event-loop failure converge on one reverse-order, failure-isolating,
   idempotent cleanup path. `exit()` requests Qt termination; action/window/session handlers do not run cleanup directly.
+- Register cleanup immediately after each successful acquisition, before the next fallible stage. Cleanup code must
+  tolerate a partially composed application and must not assume later repositories, controllers, UI, tray, or host
+  integration were created.
 - Singleton election is atomic: serialize candidates, re-probe after waiting, recover only a confirmed stale endpoint,
   and fail closed when ownership is uncertain, including privilege handoff.
 - Native session callbacks cross to the GUI thread before touching Qt-owned state. Tray, dock, System Proxy daemon,

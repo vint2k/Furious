@@ -1,5 +1,8 @@
 # Furious package guidance
 
+Inherit repository-wide rules from the root `AGENTS.md`. This file preserves the package-level boundary between
+domain, persistence, orchestration, platform integration, and presentation; nested guides specialize it in place.
+
 ## Responsibility boundaries
 
 - `Application` is the composition root. Elsewhere depend on the narrowest model, repository, service, controller, or
@@ -49,4 +52,5 @@
 
 - Read the applicable specialized guide for application composition, embedded core processes, platform helpers,
   repositories, plugins, services, backends, Qt ownership, translations, or bundled data. A missing child guide means
-  this file and the root guide are sufficient; do not recreate one merely to restate them.
+  this file and the root guide are sufficient; do not recreate one merely to restate them. Existing child guides are
+  established scopes: clarify inheritance or local invariants rather than deleting or consolidating them.

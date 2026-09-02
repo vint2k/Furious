@@ -1,11 +1,17 @@
 # Interface guidance
 
+Inherit the root and package guides. This file preserves dependency-light contracts that multiple implementations can
+satisfy without importing application composition or concrete backends.
+
 - This package defines dependency-light contracts shared across layers. It does not import Qt presentation,
   controllers, services, repositories, plugins, or concrete backends; a contract may depend on a small model/constant
   only when that does not trigger application construction or registration.
 - Contracts specify observable ownership, lifecycle, mutation, serialization, callback, and failure semantics. Search
   every representative implementation and contract test before changing one; an implementation may strengthen a
   guarantee but cannot silently weaken it.
+- Keep versioned contract changes explicit. Reject unsupported shapes at the registration/boundary layer, update every
+  bundled implementation and compatibility export together, and avoid adapters that let two conflicting ownership
+  models coexist indefinitely.
 - `CoreRuntime` is mechanism-neutral: embedded multiprocessing, direct `subprocess`, or an in-process binding can satisfy
   it. It owns execution only: zero-argument start, passive liveness, typed terminal events, and bounded idempotent
   stop/dispose. Preparation, serialization, readiness, and startup transactions belong outside this contract. Bind its

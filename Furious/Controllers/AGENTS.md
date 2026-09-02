@@ -1,5 +1,8 @@
 # Controller guidance
 
+Inherit the root and package guides. This scope preserves controllers as process-lifetime authorities for shared
+transitions, not owners of execution resources or presentation objects.
+
 ## Shared state authorities
 
 - Controllers own process-lifetime shared state and transition policy. They coordinate injected repositories/services
@@ -10,6 +13,9 @@
 - Preserve state and signal ordering, interaction gating, the exact selected `ServerProfile`, runtime snapshots,
   reconnect preference, and rollback after validation, runtime, TUN, System Proxy, cancellation, or unexpected-exit
   failure. Worker/native callbacks cross to the controller’s Qt thread before transition.
+- A startup completion must belong to the current controller generation before it can change state, active profile,
+  System Proxy, or interaction gating. Typed runtime failures keep their semantic reason; cancellation and supersession
+  are not rewritten as generic connection errors.
 - `RoutingController` owns available capability options plus selected/persisted routing. Distinguish a newly selected
   repository profile from the profile snapshot already owned by a live connection; changes use controlled reconnect,
   not mutation of the running document. User-defined routing labels are semantic data, not translatable UI literals.

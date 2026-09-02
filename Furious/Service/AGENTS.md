@@ -1,5 +1,8 @@
 # Service guidance
 
+Inherit the root, package, model, repository, plugin, core, and Qt lifetime rules. This scope owns multi-stage workflows
+and temporary resources, never durable collections, shared transition authority, or presentation.
+
 ## Workflow ownership
 
 - Services own workflows and temporary resources; controllers own shared state, repositories own durable collections,
@@ -33,6 +36,9 @@
   Post-commit reconnect/test invalidation failure is reported without undoing the committed profiles.
 - Log transport, traffic collection, and metric history remain bounded and independent of page visibility. Rendering may
   be lazy; collection/draining ownership is not.
+- Logging accepts concurrent producers through one bounded ordered model; runtime-only clearing and retention cannot
+  block producers with unbounded synchronous traversal. Metrics sampling owns its worker/future generation and discards
+  results after disconnect, disablement, replacement, or shutdown.
 
 ## Profile testing
 
@@ -53,3 +59,5 @@
 - Cover success plus invalid, stale, superseded, timeout, cancellation, partial acquisition, hidden-page, reentrant, and
   repeated-shutdown paths. Assert current identity at write-back and exact cleanup of pools, threads, sockets, replies,
   timers, ports, runtimes, callbacks, and host mutations.
+- Test pre-commit failure with unchanged live/persisted state separately from post-commit side-effect failure. Never use
+  a broad rollback assertion to conceal which boundary actually committed.

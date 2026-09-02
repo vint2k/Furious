@@ -1,5 +1,8 @@
 # Window and page guidance
 
+Inherit the root, package, Qt, widget, controller, and service guides. This scope owns persistent page composition and
+top-level presentation, not shared domain state.
+
 ## Composition and shared state
 
 - `MainWindow` owns the persistent built-in page tree and navigation; plugin pages enter through the plugin navigation
@@ -19,6 +22,9 @@
 - Long-lived pages construct persistent controls, models, timers, services, and connections once. Page visibility may
   coalesce log/graph painting or deliberately gate a lazy endpoint lookup, but it never owns log collection/draining,
   traffic sampling, subscription schedules, or an already-started request.
+- A page that creates a service must make its process-lifetime or page-lifetime ownership explicit and expose one
+  cleanup path through the containing window/application. Moving a service between pages must not duplicate schedules,
+  histories, requests, or controller connections during the transition.
 - One-shot editors/prompts use managed transient dialogs and weak compiled-safe continuations. Reusable windows such as
   the text editor and parent-owned settings dialogs retain one explicit owner, reset on reopen, and use normal close
   semantics; do not convert every top-level surface to delete-on-close or global retention.

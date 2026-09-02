@@ -1,5 +1,8 @@
 # Platform and compatibility guidance
 
+Inherit the root and package guides. This scope contains compatibility and host-integration boundaries, not a license
+for unrelated application orchestration to accumulate in a broad helper namespace.
+
 - `Frozenlib` is the low-level settings, platform, compatibility, and broad export surface. Keep imports cheap,
   cross-platform, and free of application/UI construction; preserve curated wildcard exports until consumers and
   public-import tests migrate together.
@@ -11,6 +14,9 @@
 - Keep proxy, DNS, routing, TUN, startup registration, session callbacks, external commands, and platform detection here
   or behind a runtime boundary so tests can replace them completely. Windows, macOS, Linux, Flatpak, AppImage, and older
   platform paths are distinct capabilities; never generalize from the current host.
+- A host mutation returns success only after the actual platform operation completed. The owning controller/service
+  decides rollback and persistence; low-level helpers do not silently update shared UI state or convert an unsupported
+  platform into a successful no-op.
 - Prefer argument vectors over shell strings. Each caller owns any responsiveness/cleanup timeout appropriate to its
   context; build-time commands and GUI-time host mutation do not share one universal timeout policy.
 - Own exact native threads/processes/handles and clear stale daemon references. Externally keyed caches are bounded and

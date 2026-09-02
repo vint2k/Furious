@@ -1,5 +1,8 @@
 # Translation catalog guidance
 
+Inherit the root and package guides. This scope preserves the split between extracted catalog structure and
+human-reviewed translations.
+
 ## Source and generation contract
 
 - `Furious/Externals/GenTranslation.py` is generator-managed, but its language values and `isReviewed` flags are curated
@@ -28,3 +31,5 @@
 
 - Run extraction for every affected language, review collisions/stale removal/order and the catalog diff, then run it a
   second time to prove stability. Exercise runtime lookup and affected UI retranslation under explicit locales.
+- Translation generation is a scoped repository mutation: do not run it as an incidental formatter, and do not accept
+  broad catalog churn without tracing each changed source literal or intentional stale-key removal.

@@ -1,5 +1,8 @@
 # Outer process guidance
 
+Inherit the root and package guides. This scope preserves the exact outer child-process/crash protocol and is not a
+general-purpose utility bucket.
+
 - `Utility` owns the child-side wrapper used by the outer application process and crash/exit translation. It is not a
   miscellaneous helper namespace and does not own application composition, repositories, runtimes, or UI policy.
 - `AppMainProcess` owns one exact Qt application child and one small synchronized crash-log result. Do not add a
@@ -10,6 +13,9 @@
   failure never replaces the primary failure.
 - The parent entry point joins only the child it created and shows the fallback Qt report only for a nonzero result.
   Never discover or terminate processes by name, and keep normal/source/packaged command-line entry points equivalent.
+- Crash reporting transports only bounded diagnostic text and a semantic result from the owned child. Failure to render
+  or save the fallback report must not spawn another supervisor, mutate application state, or replace the original exit
+  status.
 - Verify normal return, exception, assertion, signal, pre-application failure, crash-log failure, command dispatch,
   cross-platform spawn, exact child joining, and absence of manager servers or orphaned resources. If this process
   topology changes intentionally, rewrite this guide rather than layering another supervisor over the old one.

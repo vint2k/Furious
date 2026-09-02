@@ -11,7 +11,17 @@
   call/runtime path; implement at the owning boundary; test real behavior; then re-evaluate the architectural model.
 - When guidance says A and code appears to do B, inspect the call path and tests. Decide whether B is intentional
   evolution, compatibility debt, or a bug; preserve the intended invariant and update either code or the narrowest
-  applicable guidance. Do not encode speculation, experiments, or incidental class names as durable rules.
+  applicable guidance. Never resolve the contradiction by deleting the scoped guidance file. Do not encode speculation,
+  experiments, or incidental class names as durable rules.
+
+## Preserve the guidance hierarchy
+
+- Every existing `AGENTS.md` and `AGENTS.override.md` path is an established documentation scope. During ordinary
+  guidance maintenance, do not delete, rename, relocate, merge, consolidate, or change the kind of any existing file.
+  Improve a seemingly redundant scope in place by making its inherited and local rules more precise.
+- Add a new AGENTS file only when verified architecture has a durable uncovered scope that no existing file can
+  represent. A new scope never makes an existing one disposable. Keep override files explicit about which inherited
+  assumption they replace and why.
 
 ## Operating model
 
@@ -81,11 +91,13 @@
 
 ## Maintaining this guidance
 
-- AGENTS files contain durable decision rules, not inventories or frozen recipes. Update guidance only when supported by
+- AGENTS files are maintained architectural memory, not immutable truth. Update durable rules only when supported by
   current architecture, tests, verified runtime behavior, explicit design, or an intentional refactor completed in the
   same change.
 - Put a rule at the narrowest scope where it helps future decisions; let child guides specialize rather than repeat
-  parents. Remove obsolete rules and distinguish preferred architecture from compatibility paths.
+  parents. Remove obsolete content inside files, distinguish preferred architecture from compatibility paths, and
+  preserve every established file path while doing so.
 - After significant architectural work, ask what durable fact was learned, whether guidance now misleads, and whether a
-  future agent would choose the correct owner and test boundary. Do not update AGENTS for temporary implementation
+  future agent would choose the correct owner and test boundary. Re-read the applicable hierarchy as a fresh agent,
+  challenge rules most likely to become stale or freeze implementation, and do not record temporary implementation
   details.

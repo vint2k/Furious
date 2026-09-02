@@ -3,6 +3,9 @@
 Use the `manage-qt-pyside6-lifetimes` skill for QObject ownership, transient/reusable UI, signal retention, or packaged
 PySide6 lifetime work.
 
+Inherit the root and package guides. This scope owns reusable Qt presentation, translation/theme behavior, and lifetime
+primitives; pages and services consume them without creating parallel registries.
+
 ## Canonical presentation
 
 - Reuse `Furious.Qt` `AppQ*` controls, `AppStyleSheet`, translation/theme mixins, and shared dialog/window infrastructure.
@@ -37,6 +40,8 @@ PySide6 lifetime work.
   intentional. `AppQAction.callback` is strong by design, so the action owner cannot outlive the captured receiver.
 - Every `QNetworkReply` has one manager/context owner, one freshness rule, and one terminal deletion path. Do not attach
   ad-hoc attributes to third-party Qt objects or multiply timers/connections across show/hide cycles.
+- Queued delivery never transfers ownership implicitly. The sender may finish before delivery, so callbacks resolve a
+  still-valid receiver and current generation in the receiver's Qt thread before touching widgets, models, or wrappers.
 
 ## Geometry and verification
 

@@ -1,5 +1,8 @@
 # Bundled extension guidance
 
+Inherit the root, package, and plugin guides. This scope covers host-shipped non-runtime plugins and must not gain
+private authority merely because the code is bundled.
+
 - `Extensions` contains host-shipped plugins that are not proxy runtimes. They register through the same public API and
   lifecycle as entry-point plugins and receive no private repository, controller, or UI side channel.
 - `StandardSubscriptionPlugin` owns format recognition and decoding only. A decoder returns an immutable neutral
@@ -9,6 +12,9 @@
   declared result shape, preserve useful names/upstream IDs, and never log a complete payload or link. Current standard
   formats are linear plain/Base64 share-link envelopes; introduce explicit size/depth/work limits before adding richer
   recursive or nested formats.
+- Decoder output is descriptive, not a repository transaction. It cannot assign live profile identity, mutate a
+  subscription group, cancel tests, reconnect, or publish UI state; those decisions remain at the import/manager commit
+  boundaries.
 - Keep bundled registration deterministic, side-effect-light, and discoverable in source, wheel, and Nuitka builds.
   Test format selection/fallback, malformed and secret-bearing input, duplicate occurrence identity, unsupported
   subscription protocols, registration rollback, and absence of repository/UI mutation during decoding. Evolve this

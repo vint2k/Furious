@@ -1,5 +1,8 @@
 # Xray guidance
 
+Inherit the common backend and plugin rules. This scope owns Xray's full JSON preservation, routing/assets/statistics,
+and protocol/transport/TLS projections.
+
 ## Full-document preservation
 
 - The complete Xray JSON document is authoritative. Protocol, transport, TLS, local-endpoint, logging, routing, and TUN
@@ -20,6 +23,8 @@
 - Xray owns routing profiles/options, geo assets, API statistics, and the `XRAY_LOCATION_ASSET` environment contract.
   Asset replacement remains digest-verified and atomic; action providers retain reusable routing/asset windows only
   through the created action owner and create transient settings dialogs per request.
+- Asset downloads stage bytes and digest verification before replacing the live file. A failed request, checksum, or
+  write leaves the prior usable asset intact and reports the failure without pretending an update succeeded.
 - Verify full-document and URI preservation, aliases and unknown values, runtime-copy isolation for routing/log/TUN/tests,
   multiple TUN inbounds, asset integrity/failure, statistics and process cleanup, compiled-safe UI callbacks, and
   repeated editor/window destruction. Update this scope when an upstream or plugin capability changes intentionally.

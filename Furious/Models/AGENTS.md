@@ -1,5 +1,8 @@
 # Model guidance
 
+Inherit the root and package guides. This scope owns dependency-light domain shape and identity, never live persistence,
+Qt presentation, plugin discovery, or workflow execution.
+
 ## Domain shape and identity
 
 - Models are core-neutral Python data and transformations. Do not import Qt, globals, repositories, services,
@@ -11,6 +14,9 @@
   subscription ownership/key, latency, speed, annotations, and local flags never become core-configuration fields.
 - Preserve unknown metadata and legacy aliases across load/save. `independentCopy()` creates a manual profile with a new
   ID and no subscription owner; a runtime `deepcopy()` preserves identity while isolating mutable preparation.
+- Treat serialized and plugin-provided mappings as untrusted values. Normalize only documented compatibility aliases,
+  retain unknown forward-compatible fields, and keep construction diagnostics available without mutating repositories
+  or invoking a backend runtime.
 - `ensureProfile()` normalizes rather than clones: metadata arguments update an existing profile. Use an independent
   copy for a new stored item and a runtime copy when logical identity must survive without mutating persistence.
 - Profile ID, object identity, subscription source/key, connection fingerprint, display text, and row position answer
