@@ -278,6 +278,7 @@ class AppStyleSheet:
         caretUpIcon = f'{iconPrefix}/caret-up-fill.svg'
         caretRightIcon = f'{iconPrefix}/caret-right-fill.svg'
         checkIcon = ':/Icons/bootstrap/white/check.svg'
+        clearIcon = f'{iconPrefix}/x.svg'
 
         return composeStyleSheet(
             palette,
@@ -286,4 +287,5 @@ class AppStyleSheet:
             caretUpIcon,
             caretRightIcon,
             checkIcon,
+            clearIcon,
         )

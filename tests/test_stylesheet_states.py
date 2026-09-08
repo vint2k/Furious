@@ -19,15 +19,15 @@
 
 from __future__ import annotations
 
-from Furious.Qt import AppStyleSheet
+from Furious.Qt import AppQLineEdit, AppStyleSheet
 from Furious.Widget.NavigationView import NavigationView
 
 from PySide6 import QtCore
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QPushButton, QStyleOptionButton, QWidget
+from PySide6.QtWidgets import QPushButton, QStyleOptionButton, QToolButton, QWidget
 
-from tests.support import application, collectAtBoundary, processQtEvents
+from tests.support import application, collectAtBoundary, processQtEvents, waitFor
 
 import unittest
 
@@ -83,6 +83,74 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
         button.deleteLater()
 
         return color
+
+    def testClearButtonKeepsNativeBehaviorAndGeometryAcrossThemes(self):
+        """Keep embedded buttons centered, theme-correct and bounded after restyling."""
+        app = application()
+        originalStyleSheet = app.styleSheet()
+        edit = AppQLineEdit()
+        edit.setClearButtonEnabled(True)
+        edit.resize(340, 36)
+        edit.show()
+        edit.activateWindow()
+        edit.setFocus()
+        try:
+            for theme in (AppStyleSheet.Light, AppStyleSheet.Dark) * 3:
+                for direction in (QtCore.Qt.LeftToRight, QtCore.Qt.RightToLeft):
+                    with self.subTest(theme=theme, direction=direction):
+                        edit.setLayoutDirection(direction)
+                        edit.setText('example search')
+                        edit.setSelection(0, 7)
+                        app.setStyleSheet(AppStyleSheet.forTheme(theme))
+                        processQtEvents()
+                        self.assertEqual(edit.selectedText(), 'example')
+                        buttons = edit.findChildren(QToolButton)
+                        self.assertEqual(len(buttons), 1)
+                        button = buttons[0]
+                        self.assertTrue(edit.rect().contains(button.geometry()))
+                        self.assertLessEqual(
+                            abs(
+                                button.geometry().center().y()
+                                - edit.rect().center().y()
+                            ),
+                            1,
+                        )
+                        self.assertFalse(button.icon().isNull())
+                        pixmap = button.icon().pixmap(16, 16).toImage()
+                        colors = [
+                            pixmap.pixelColor(x, y)
+                            for x in range(pixmap.width())
+                            for y in range(pixmap.height())
+                            if pixmap.pixelColor(x, y).alpha() > 128
+                        ]
+                        self.assertTrue(colors)
+                        self.assertTrue(
+                            all(
+                                (color.lightness() > 128)
+                                == (theme == AppStyleSheet.Dark)
+                                for color in colors
+                            )
+                        )
+                        QTest.mouseClick(button, QtCore.Qt.LeftButton)
+                        self.assertEqual(edit.text(), '')
+                        self.assertTrue(edit.hasFocus())
+                        self.assertTrue(waitFor(lambda: not button.isVisible()))
+            edit.setText('read only')
+            edit.setReadOnly(True)
+            app.setStyleSheet(AppStyleSheet.forTheme(AppStyleSheet.Light))
+            processQtEvents()
+            self.assertEqual(edit.text(), 'read only')
+            self.assertFalse(edit.findChild(QToolButton).isEnabled())
+            app.setStyleSheet(AppStyleSheet.forTheme(AppStyleSheet.Dark))
+            edit.setClearButtonEnabled(False)
+            processQtEvents()
+            self.assertFalse(edit.isClearButtonEnabled())
+            self.assertFalse(edit.findChildren(QToolButton))
+        finally:
+            edit.close()
+            edit.deleteLater()
+            processQtEvents()
+            app.setStyleSheet(originalStyleSheet)
 
     def testFlatAndLinkButtonsRetainFocusedOutlineDuringHover(self):
         """Do not let flat presentation clear the keyboard-focus frame."""

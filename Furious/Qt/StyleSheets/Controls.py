@@ -26,6 +26,7 @@ def controlStyleSheet(
     caretUpIcon,
     caretRightIcon,
     checkIcon,
+    clearIcon,
 ):
     """Return interactive control styling."""
     return dedent(f"""
@@ -359,6 +360,33 @@ def controlStyleSheet(
                 color: {palette['text']};
                 selection-background-color: {palette['selection']};
                 selection-color: {palette['selection_text']};
+            }}
+
+            QLineEdit {{
+                lineedit-clear-button-icon: url("{clearIcon}");
+            }}
+
+            /* Embedded actions keep Qt's geometry, without toolbar padding. */
+            QLineEdit QToolButton {{
+                min-width: 0;
+                min-height: 0;
+                padding: 0;
+                margin: 0;
+                border: none;
+                border-radius: 4px;
+                background-color: transparent;
+            }}
+
+            QLineEdit QToolButton:hover {{
+                background-color: {palette['hover']};
+            }}
+
+            QLineEdit QToolButton:pressed {{
+                background-color: {palette['pressed']};
+            }}
+
+            QLineEdit QToolButton:disabled {{
+                background-color: transparent;
             }}
 
             QLineEdit:hover,

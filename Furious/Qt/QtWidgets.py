@@ -25,7 +25,7 @@ from Furious.Qt.AppStyleSheet import *
 from Furious.Qt.DynamicTheme import *
 from Furious.Qt.DynamicTranslate import gettext as _
 from Furious.Qt.QtGui import *
-from Furious.Qt.Signals import connectWeakly
+from Furious.Qt.Signals import connectWeakly, singleShotWeakly
 
 from PySide6 import QtCore
 from PySide6.QtGui import *
@@ -625,7 +625,30 @@ class AppQLineEdit(Mixins.QTranslatable, QLineEdit):
 
     def __init__(self, *args, **kwargs):
         """Initialize the AppQLineEdit."""
+        self._clearIconRefreshPending = False
+
         super().__init__(*args, **kwargs)
+
+    def changeEvent(self, event):
+        """Refresh the cached native icon after Qt finishes applying its style."""
+        super().changeEvent(event)
+
+        if (
+            event.type() == QtCore.QEvent.Type.StyleChange
+            and self.isClearButtonEnabled()
+            and not self._clearIconRefreshPending
+        ):
+            self._clearIconRefreshPending = True
+
+            singleShotWeakly(0, self, '_refreshClearIcon')
+
+    def _refreshClearIcon(self):
+        """Recreate the native action outside Qt's child-polishing traversal."""
+        self._clearIconRefreshPending = False
+
+        if self.isClearButtonEnabled():
+            self.setClearButtonEnabled(False)
+            self.setClearButtonEnabled(True)
 
     def retranslate(self):
         """Refresh translated text for the app q line edit."""

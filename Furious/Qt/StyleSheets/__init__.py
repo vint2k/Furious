@@ -29,6 +29,7 @@ def composeStyleSheet(
     caretUpIcon,
     caretRightIcon,
     checkIcon,
+    clearIcon,
 ):
     """Return the complete stylesheet without exposing component fragments."""
     return '\n\n'.join(
@@ -40,6 +41,7 @@ def composeStyleSheet(
                 caretUpIcon,
                 caretRightIcon,
                 checkIcon,
+                clearIcon,
             ),
             dataViewStyleSheet(palette, progressBarStyleSheet, checkIcon),
         )
