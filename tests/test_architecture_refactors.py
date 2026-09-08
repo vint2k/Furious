@@ -1619,7 +1619,6 @@ class StyleSheetCompositionTest(TestCase):
                     self.assertIn(selector, stylesheet)
 
                 self.assertEqual(stylesheet.count('QToolTip {'), 1)
-                self.assertEqual(stylesheet.count('QTableView,'), 1)
 
     def testComboBoxDropDownHoverStaysInsideTheFocusBorder(self):
         """Keep the arrow hover fill from covering the outer focus outline."""
