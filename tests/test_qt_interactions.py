@@ -520,7 +520,7 @@ class ServerTableQtInteractionTest(unittest.TestCase):
                 window.close()
                 window.deleteLater()
 
-    def testContextMenuUsesOnlyMultithreadedDownloadSpeedAction(self):
+    def testTestActionsUseOnlyMultithreadedDownloadSpeedAction(self):
         """Expose one download command backed by the multithreaded scheduler."""
         with isolatedSettings():
             table = self._table(('one',))
@@ -528,8 +528,8 @@ class ServerTableQtInteractionTest(unittest.TestCase):
             try:
                 actions = tuple(
                     action
-                    for action in table.contextMenu.actions()
-                    if not action.isSeparator()
+                    for action in table.testActions
+                    if isinstance(action, AppQAction)
                     and action.textEnglish == 'Test Download Speed'
                 )
 
@@ -1013,6 +1013,9 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
             action = AppQAction(
                 'Fixture import',
                 callback=lambda: imported.append(True),
+                shortcut=QtCore.QKeyCombination(
+                    QtCore.Qt.ControlModifier, QtCore.Qt.Key_V
+                ),
                 translatable=False,
             )
 
@@ -1028,7 +1031,7 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                     self.assertTrue(home.emptyState.isVisible())
                     self.assertIn('No profiles yet', home.emptyStateLabel.text())
                     self.assertIs(home.importMenu.actions()[0], action)
-                    self.assertIn(
+                    self.assertNotIn(
                         action, home.userServersQTableWidget.contextMenu.actions()
                     )
 
@@ -1040,6 +1043,18 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                     processQtEvents()
 
                     self.assertEqual(imported, [True])
+
+                    table = home.userServersQTableWidget
+                    table.setFocus()
+                    processQtEvents()
+                    QTest.keyClick(table, QtCore.Qt.Key_V, QtCore.Qt.ControlModifier)
+                    processQtEvents()
+
+                    self.assertEqual(imported, [True, True])
+                    self.assertEqual(
+                        action.shortcutContext(),
+                        QtCore.Qt.ShortcutContext.WidgetShortcut,
+                    )
 
                     profile = ServerTableQtInteractionTest._profile('alpha')
                     home.userServersQTableWidget.appendNewItemByFactory(profile)
@@ -1081,11 +1096,57 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                         home.userServersQTableWidget.proxyModel.rowCount(), 1
                     )
 
-                    for testAction in home.userServersQTableWidget.testActions:
-                        self.assertIn(
+                    testActions = [
+                        action
+                        for action in table.testActions
+                        if isinstance(action, AppQAction)
+                    ]
+                    menuActions = [
+                        action
+                        for action in home.testMenu.actions()
+                        if not action.isSeparator()
+                    ]
+
+                    self.assertEqual(len(testActions), 5)
+                    self.assertEqual(menuActions, testActions)
+                    self.assertEqual(
+                        [
+                            None if action.isSeparator() else action.text()
+                            for action in home.testMenu.actions()
+                        ],
+                        [
+                            'Test Ping Latency',
+                            'Test Tcping Latency',
+                            'Test Download Speed',
+                            None,
+                            'Clear Test Results',
+                            None,
+                            'Stop All Tests',
+                        ],
+                    )
+                    self.assertTrue(testActions[-1].icon().isNull())
+                    self.assertFalse(home.testButton.icon().isNull())
+
+                    for testAction in testActions:
+                        self.assertNotIn(
                             testAction,
                             home.userServersQTableWidget.contextMenu.actions(),
                         )
+
+                    table.setFocus()
+                    processQtEvents()
+
+                    for key, method in (
+                        (QtCore.Qt.Key_P, 'testSelectedItemPingLatency'),
+                        (QtCore.Qt.Key_O, 'testSelectedItemTcpingLatency'),
+                        (QtCore.Qt.Key_M, 'testSelectedItemDownloadSpeedMulti'),
+                        (QtCore.Qt.Key_R, 'clearSelectedItemTestResult'),
+                    ):
+                        with mock.patch.object(table, method) as callback:
+                            QTest.keyClick(table, key, QtCore.Qt.ControlModifier)
+                            processQtEvents()
+
+                            callback.assert_called_once_with()
 
                     manager = home.userServersQTableWidget.profileTestManager
 
@@ -1093,8 +1154,8 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                         manager._latencyScheduler, 'cancelAll'
                     ) as cancel:
                         table = home.userServersQTableWidget
-                        menu = table.contextMenu
-                        menu.popup(table.viewport().mapToGlobal(QtCore.QPoint(20, 20)))
+                        menu = home.testMenu
+                        QTest.mouseClick(home.testButton, QtCore.Qt.LeftButton)
                         processQtEvents()
                         menu.setActiveAction(table.testActions[-1])
                         QTest.keyClick(menu, QtCore.Qt.Key_Return)

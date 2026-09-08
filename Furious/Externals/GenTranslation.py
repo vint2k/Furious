@@ -3340,5 +3340,13 @@ TRANSLATION = {
         "RU": "Нет записей журнала, соответствующих текущим фильтрам.",
         "ZH": "没有符合当前筛选条件的日志。",
         "isReviewed": "True"
+    },
+    "Tests": {
+        "source": [
+            "Furious.Window.HomePage"
+        ],
+        "RU": "Тесты",
+        "ZH": "测试",
+        "isReviewed": "True"
     }
 }

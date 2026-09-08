@@ -620,7 +620,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
 
     @staticmethod
     def serverImportActions():
-        """Build import actions contributed to the server table context menu."""
+        """Build actions for the Home import menu and server table shortcuts."""
         return (
             ImportFromFileAction(),
             ImportURIFromClipboardAction(
@@ -636,6 +636,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
                     QtCore.Qt.Key.Key_J,
                 ),
             ),
+            AppQSeparator(),
             ImportQRCodeOnTheScreenAction(),
         )
 
@@ -719,6 +720,14 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
             parent=self,
         )
         self.importButton.setEnabled(bool(self.userServersQTableWidget.importActions))
+
+        self.testMenu = AppQMenu(*self.userServersQTableWidget.testActions, parent=self)
+        self.testButton = AppQMenuPushButton(
+            _('Tests'),
+            icon=bootstrapIcon('graph-up.svg'),
+            popupMenu=self.testMenu,
+            parent=self,
+        )
 
         self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
 
@@ -815,6 +824,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
         self.actionLayout.setSpacing(8)
         self.actionLayout.addWidget(self.serverButton)
         self.actionLayout.addWidget(self.importButton)
+        self.actionLayout.addWidget(self.testButton)
         self.actionLayout.addStretch(1)
         self.actionLayout.addWidget(self.subscriptionFilterComboBox)
 

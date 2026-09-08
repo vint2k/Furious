@@ -928,7 +928,7 @@ class ServerTableView(
                     QtCore.Qt.Key.Key_O,
                 ),
             ),
-            # The context menu intentionally exposes only the multithreaded test.
+            # The Tests menu intentionally exposes only the multithreaded test.
             # Keep the single-threaded methods as a programmatic API for callers
             # that need that scheduler explicitly.
             AppQAction(
@@ -939,6 +939,7 @@ class ServerTableView(
                     QtCore.Qt.Key.Key_M,
                 ),
             ),
+            AppQSeparator(),
             AppQAction(
                 _('Clear Test Results'),
                 callback=lambda: self.clearSelectedItemTestResult(),
@@ -947,6 +948,7 @@ class ServerTableView(
                     QtCore.Qt.Key.Key_R,
                 ),
             ),
+            AppQSeparator(),
             AppQAction(
                 _('Stop All Tests'),
                 callback=self.profileTestManager.cancelAll,
@@ -988,11 +990,7 @@ class ServerTableView(
                 ),
             ),
             AppQSeparator(),
-            *self.testActions,
-            AppQSeparator(),
             self.advancedActionRef,
-            AppQSeparator(),
-            *self.importActions,
             AppQSeparator(),
             AppQAction(
                 _('Export Share Link To Clipboard'),
@@ -1020,7 +1018,9 @@ class ServerTableView(
         self.contextMenu = AppQMenu(*contextMenuActions, parent=self)
         self.contextMenu.aboutToShow.connect(self._rebuildSubscriptionMenu)
 
-        self._registerMenuShortcuts(self.contextMenu)
+        self._registerActionShortcuts(self.contextMenu.actions())
+        self._registerActionShortcuts(self.importActions)
+        self._registerActionShortcuts(self.testActions)
         self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.handleCustomContextMenuRequested)
 
@@ -1608,9 +1608,9 @@ class ServerTableView(
             )
         )
 
-    def _registerMenuShortcuts(self, menu):
+    def _registerActionShortcuts(self, actions):
         """Activate every nested table action only while this view has focus."""
-        for action in menu.actions():
+        for action in actions:
             if action.isSeparator():
                 continue
 
@@ -1622,7 +1622,7 @@ class ServerTableView(
             submenu = action.menu() if hasattr(action, 'menu') else None
 
             if submenu is not None:
-                self._registerMenuShortcuts(submenu)
+                self._registerActionShortcuts(submenu.actions())
 
     def _clearSubscriptionActions(self):
         """Release callbacks and wrappers owned by the dynamic group submenu."""
