@@ -25,7 +25,7 @@ from Furious.Frozenlib import AppBuiltinProxyMode, AppSettings, Mixins
 from Furious.Models import CoreConfiguration, ServerProfile
 from Furious.Plugins.API import RoutingOption
 from Furious.Repository import Storage, SubscriptionGroup
-from Furious.Qt import AppHue, AppQDialog, AppQSwitch, gettext
+from Furious.Qt import AppQAction, AppHue, AppQDialog, AppQSwitch, gettext
 from Furious.Widget.RoutingSelector import RoutingSelector
 from Furious.Widget.ServerTableView import ServerTableView
 from Furious.Widget.SubscriptionTableView import SubscriptionTableView
@@ -38,7 +38,7 @@ from Furious.Window.SubscriptionPage import _SubscriptionEditorDialog
 
 from PySide6 import QtCore, QtGui
 from PySide6.QtTest import QSignalSpy, QTest
-from PySide6.QtWidgets import QLineEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLineEdit, QToolButton, QVBoxLayout, QWidget
 
 from shiboken6 import isValid
 
@@ -947,7 +947,14 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
         collectAtBoundary()
 
     @contextmanager
-    def _home(self, settingsController, connectionController, routingController):
+    def _home(
+        self,
+        settingsController,
+        connectionController,
+        routingController,
+        *,
+        importActions=(),
+    ):
         """Build the smallest side-effect-free real Home composition."""
         registry = mock.Mock()
         registry.protocolDescriptors.return_value = ()
@@ -955,6 +962,10 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
         with ExitStack() as stack:
             for target, value in (
                 ('Furious.Window.HomePage.AppSettingsController', settingsController),
+                (
+                    'Furious.Widget.ServerTableView.AppConnectionController',
+                    connectionController,
+                ),
                 (
                     'Furious.Window.HomePage.AppConnectionController',
                     connectionController,
@@ -973,7 +984,9 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                 stack.enter_context(mock.patch(target, return_value=value))
 
             stack.enter_context(
-                mock.patch.object(HomePage, 'serverImportActions', return_value=())
+                mock.patch.object(
+                    HomePage, 'serverImportActions', return_value=importActions
+                )
             )
 
             home = HomePage()
@@ -985,6 +998,99 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                 home.userServersQTableWidget.cleanup()
                 home.close()
                 home.deleteLater()
+
+    def testHomeEmptyStateRecoversFilteredProfilesAndReusesActions(self):
+        """Use existing menus, search clear and group selection to recover profiles."""
+        with isolatedSettings():
+            AppSettings.set('Language', 'EN')
+            settings = SettingsController()
+            connection = _ConnectionControllerFixture()
+            routing = _RoutingControllerFixture(
+                (RoutingOption('default', 'Default'),), 'default'
+            )
+            imported = []
+            action = AppQAction(
+                'Fixture import',
+                callback=lambda: imported.append(True),
+                translatable=False,
+            )
+            try:
+                with self._home(
+                    settings, connection, routing, importActions=(action,)
+                ) as home:
+                    home.resize(1000, 600)
+                    home.show()
+                    home.activateWindow()
+                    processQtEvents()
+                    self.assertTrue(home.emptyState.isVisible())
+                    self.assertIn('No profiles yet', home.emptyStateLabel.text())
+                    self.assertIs(home.importMenu.actions()[0], action)
+                    self.assertIn(
+                        action, home.userServersQTableWidget.contextMenu.actions()
+                    )
+                    QTest.mouseClick(home.importButton, QtCore.Qt.LeftButton)
+                    processQtEvents()
+                    QTest.keyClick(home.importMenu, QtCore.Qt.Key_Down)
+                    QTest.keyClick(home.importMenu, QtCore.Qt.Key_Return)
+                    processQtEvents()
+                    self.assertEqual(imported, [True])
+                    profile = ServerTableQtInteractionTest._profile('alpha')
+                    home.userServersQTableWidget.appendNewItemByFactory(profile)
+                    processQtEvents()
+                    self.assertFalse(home.emptyState.isVisible())
+                    home.searchLineEdit.setFocus()
+                    QTest.keyClicks(home.searchLineEdit, 'missing')
+                    QTest.keyClick(home.searchLineEdit, QtCore.Qt.Key_Return)
+                    processQtEvents()
+                    self.assertTrue(home.emptyState.isVisible())
+                    QTest.mouseClick(
+                        home.searchLineEdit.findChild(QToolButton), QtCore.Qt.LeftButton
+                    )
+                    processQtEvents()
+                    self.assertFalse(home.emptyState.isVisible())
+                    self.assertTrue(home.searchLineEdit.hasFocus())
+                    self.assertEqual(home.searchLineEdit.text(), '')
+                    self.assertIs(Storage.UserServers()[0], profile)
+                    home.subscriptionFilterComboBox.addItem(
+                        'Empty group', 'missing-group'
+                    )
+                    home.subscriptionFilterComboBox.setCurrentIndex(2)
+                    processQtEvents()
+                    self.assertTrue(home.emptyState.isVisible())
+                    home.subscriptionFilterComboBox.setFocus()
+                    QTest.keyClick(home.subscriptionFilterComboBox, QtCore.Qt.Key_Home)
+                    processQtEvents()
+                    self.assertEqual(home.subscriptionFilterComboBox.currentIndex(), 0)
+                    self.assertEqual(
+                        home.userServersQTableWidget.proxyModel.rowCount(), 1
+                    )
+                    for testAction in home.userServersQTableWidget.testActions:
+                        self.assertIn(
+                            testAction,
+                            home.userServersQTableWidget.contextMenu.actions(),
+                        )
+                    manager = home.userServersQTableWidget.profileTestManager
+                    with mock.patch.object(
+                        manager._latencyScheduler, 'cancelAll'
+                    ) as cancel:
+                        table = home.userServersQTableWidget
+                        menu = table.contextMenu
+                        menu.popup(table.viewport().mapToGlobal(QtCore.QPoint(20, 20)))
+                        processQtEvents()
+                        menu.setActiveAction(table.testActions[-1])
+                        QTest.keyClick(menu, QtCore.Qt.Key_Return)
+                        processQtEvents()
+                    cancel.assert_called_once_with()
+                    home.userServersQTableWidget.deleteItemByIndex(
+                        [0], showTrayMessage=False, showProgress=False
+                    )
+                    processQtEvents()
+                    self.assertTrue(home.emptyState.isVisible())
+                    self.assertIn('No profiles yet', home.emptyStateLabel.text())
+            finally:
+                settings.deleteLater()
+                connection.deleteLater()
+                routing.deleteLater()
 
     def testHomeTunModeLabelExplainsMissingAdministratorPrivilege(self):
         """Use the same privilege-aware TUN presentation as Settings."""

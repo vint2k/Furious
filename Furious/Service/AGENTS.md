@@ -65,6 +65,8 @@ for lifetime primitives. This scope owns multi-stage workflows and temporary res
   fingerprint, snapshot, ownership, and explicit options; workers return values and the manager resolves the current
   target before mutating latency/speed. Freshness currently resolves ID plus connection fingerprint; subscription
   ownership drives explicit group invalidation, not an implicit row or metadata equality test.
+- User-requested test cancellation preserves received results, suppresses late cancelled results, and leaves the
+  manager available for new work. Shutdown separately closes admission and releases owned execution resources.
 - Repository changes reconcile queued/running jobs. A successful subscription commit cancels that group's pending and
   active tests, stale-marks non-cancellable calls, clears only that group's current results, and leaves manual/other-group
   work untouched.

@@ -29,6 +29,8 @@ top-level presentation, not shared domain state.
 - One-shot editors/prompts use managed transient dialogs and weak compiled-safe continuations. Reusable text/editor
   windows and retained settings dialogs need an explicit owner and reopen policy. A settings label or Qt parent does
   not determine lifetime: check the actual base class and close/accept/reject path before changing deletion policy.
+- Empty-state presentation distinguishes an empty repository from a filtered view with no matches. Recovery changes
+  view filters only; reuse existing import/edit/test actions instead of creating page-specific workflow owners.
 - Use normal layouts and `AppQ*` controls. Restore top-level geometry only after persistent composition and through the
   canonical first-show path; never-shown Qt fallback geometry must not overwrite a prior user decision.
 - QR export captures capped independent profile snapshots before deferred work. Incremental generation is owned by

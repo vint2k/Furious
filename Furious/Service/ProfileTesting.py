@@ -1343,6 +1343,9 @@ class ProfileTestManager(QtCore.QObject):
 
     def testPing(self, profiles, *, timeoutMilliseconds=2000):
         """Queue ICMP latency tests for immutable profile snapshots."""
+        if self._shuttingDown:
+            return
+
         self._latencyScheduler.enqueue(
             profiles,
             LatencyTestOptions(LatencyTestType.Ping, timeoutMilliseconds),
@@ -1350,6 +1353,9 @@ class ProfileTestManager(QtCore.QObject):
 
     def testTcping(self, profiles, *, timeoutMilliseconds=2000):
         """Queue coalesced asynchronous TCP latency tests."""
+        if self._shuttingDown:
+            return
+
         self._latencyScheduler.enqueue(
             profiles,
             LatencyTestOptions(LatencyTestType.Tcping, timeoutMilliseconds),
@@ -1365,6 +1371,9 @@ class ProfileTestManager(QtCore.QObject):
         logActionMessage=False,
     ):
         """Queue serial or concurrent downloads with explicit operation options."""
+        if self._shuttingDown:
+            return
+
         if testUrl is None:
             try:
                 configuredUrl = AppSettings.get('CustomNetworkSpeedTestURL')
@@ -1390,6 +1399,12 @@ class ProfileTestManager(QtCore.QObject):
         )
 
         scheduler.enqueue(profiles, options)
+
+    def cancelAll(self):
+        """Stop current tests without clearing results or closing the service."""
+        self._latencyScheduler.cancelAll()
+        self._serialDownloadScheduler.cancelAll()
+        self._concurrentDownloadScheduler.cancelAll()
 
     def clearResults(self, profiles):
         """Clear both presentation-compatible result fields for current profiles."""

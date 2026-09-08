@@ -97,6 +97,7 @@ from Furious.Qt import (
     AppStyleSheet,
     gettext as _,
 )
+from Furious.Service.LogManager import ALL_LOGS_FILTER
 from Furious.Service import (
     APPLICATION_LOG_CATEGORY,
     CORE_LOG_CATEGORY,
@@ -123,6 +124,7 @@ from PySide6 import QtCore
 from PySide6.QtGui import QImage
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
+    QToolButton,
     QComboBox,
     QHBoxLayout,
     QLabel,
@@ -1553,6 +1555,7 @@ class UnifiedLogPageTest(unittest.TestCase):
                 (page.autoScrollLabel, 'Auto Scroll Down'),
                 (page.autoClearLabel, 'Auto Clear Log'),
                 (page.highlightStatusLabel, 'Processing...'),
+                (page.emptyStateLabel, 'No logs match the current filters.'),
             )
 
             AppSettings.set('Language', 'ZH')
@@ -1662,7 +1665,102 @@ class UnifiedLogPageTest(unittest.TestCase):
                 ['application beta [literal]', 'application [literal] live'],
             )
 
+            clearButton = page.searchLineEdit.findChild(QToolButton)
+            self.assertIsNotNone(clearButton)
+            QTest.mouseClick(clearButton, QtCore.Qt.MouseButton.LeftButton)
+            self.assertRendered(page)
+            self.assertEqual(page.searchLineEdit.text(), '')
+            self.assertFalse(page.searchLineEdit.toolTip())
+            self.assertEqual(
+                page.filterComboBox.currentData(), APPLICATION_LOG_CATEGORY
+            )
+            self.assertEqual(
+                page.plainText().splitlines(),
+                [
+                    'application alpha',
+                    'application beta [literal]',
+                    'application [literal] live',
+                    'application ignored',
+                ],
+            )
+
             self.disposePage(page)
+
+    def testNoMatchGuidanceUsesExistingFilterControls(self):
+        """Recover filtered logs by clearing search and selecting the desired category."""
+        with isolatedSettings():
+            manager = LogManager(maximumEntries=5)
+            page = LogPage(manager=manager)
+            self.addCleanup(self.disposePage, page)
+            page.show()
+            self.assertRendered(page)
+            self.assertFalse(page.emptyState.isVisible())
+
+            manager.append('application one', APPLICATION_LOG_CATEGORY)
+            self.assertRendered(page)
+            page.filterComboBox.setCurrentIndex(
+                page.filterComboBox.findData(CORE_LOG_CATEGORY)
+            )
+            self.assertRendered(page)
+            self.assertTrue(page.emptyState.isVisible())
+
+            manager.append('core one', CORE_LOG_CATEGORY)
+            self.assertRendered(page)
+            self.assertFalse(page.emptyState.isVisible())
+
+            page.searchLineEdit.setText('[missing')
+            self.assertRendered(page)
+            self.assertTrue(page.emptyState.isVisible())
+            self.assertEqual(page.plainText(), '')
+            self.assertTrue(page.searchLineEdit.toolTip())
+
+            QTest.mouseClick(
+                page.searchLineEdit.findChild(QToolButton),
+                QtCore.Qt.MouseButton.LeftButton,
+            )
+            self.assertRendered(page)
+            self.assertFalse(page.emptyState.isVisible())
+            self.assertEqual(page.searchLineEdit.text(), '')
+            self.assertFalse(page.searchLineEdit.toolTip())
+            self.assertEqual(page.filterComboBox.currentData(), CORE_LOG_CATEGORY)
+            self.assertEqual(page.plainText(), 'core one')
+            self.assertTrue(page.searchLineEdit.hasFocus())
+            page.filterComboBox.setFocus()
+            QTest.keyClick(page.filterComboBox, QtCore.Qt.Key.Key_Home)
+            self.assertRendered(page)
+            self.assertEqual(page.filterComboBox.currentData(), ALL_LOGS_FILTER)
+            self.assertEqual(
+                AppSettings.get('LogViewerSelectedCategory'), ALL_LOGS_FILTER
+            )
+            self.assertEqual(
+                page.plainText().splitlines(), ['application one', 'core one']
+            )
+
+    def testNoMatchGuidanceTracksEvictionAndHiddenCatchUp(self):
+        """Refresh guidance when the last match is evicted or arrives while hidden."""
+        with isolatedSettings():
+            manager = LogManager(maximumEntries=2)
+            page = LogPage(manager=manager)
+            self.addCleanup(self.disposePage, page)
+            manager.append('match first')
+            page.searchLineEdit.setText('match')
+            page.show()
+            self.assertRendered(page)
+            self.assertFalse(page.emptyState.isVisible())
+
+            manager.append('other one')
+            manager.append('other two')
+            self.assertRendered(page)
+            self.assertTrue(page.emptyState.isVisible())
+            self.assertEqual(page.plainText(), '')
+
+            page.hide()
+            manager.append('match live')
+            processQtEvents()
+            page.show()
+            self.assertRendered(page)
+            self.assertFalse(page.emptyState.isVisible())
+            self.assertEqual(page.plainText(), 'match live')
 
     def testSearchPrunesEvictedMatchingEntriesIncrementally(self):
         """Remove a matching rendered prefix when manager retention evicts it."""

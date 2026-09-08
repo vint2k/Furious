@@ -311,6 +311,86 @@ class ProfileTestServiceTest(unittest.TestCase):
 
         return manager
 
+    def testCancelAllPreservesResultsRejectsLatePingAndAllowsNewTests(self):
+        """Cancel active and queued work across all schedulers without shutting down."""
+        profiles = [self._profile(str(i), f'{i}.example') for i in range(3)]
+        profiles[0].metadata.latency = 'old latency'
+        manager = self._manager(profiles)
+        scheduler = manager._latencyScheduler
+        scheduler.threadPool = pool = _ControlledThreadPool()
+        scheduler.pingWorkerFactory = _ControlledLatencyWorker
+        manager.testPing(profiles)
+        manager.testDownloadSpeed(profiles, concurrent=False)
+        manager.testDownloadSpeed(profiles, concurrent=True)
+        processQtEvents()
+        workers = list(_ControlledDownloadWorker.instances)
+        workers[0].publish('partial speed')
+        manager.cancelAll()
+        manager.cancelAll()
+        pool.started[0].finish('late latency')
+        processQtEvents()
+        self.assertEqual(profiles[0].metadata.latency, 'old latency')
+        self.assertEqual(profiles[0].metadata.speed, 'partial speed')
+        self.assertTrue(all(worker.cancelCount == 1 for worker in workers))
+        self.assertFalse(scheduler.queue)
+        self.assertFalse(scheduler.activeJobs)
+        for downloads in (
+            manager._serialDownloadScheduler,
+            manager._concurrentDownloadScheduler,
+        ):
+            self.assertFalse(downloads.queue)
+            self.assertFalse(downloads.activeJobs)
+            self.assertFalse(downloads.activePorts)
+        manager.testPing(profiles[:1])
+        processQtEvents()
+        pool.started[-1].finish('new latency')
+        processQtEvents()
+        self.assertEqual(profiles[0].metadata.latency, 'new latency')
+
+    def testCancelAllDropsBufferedTcpingFanoutAndAcceptsNewGeneration(self):
+        """Stop shared results between GUI batches without losing completed values."""
+        profiles = [self._profile(str(i), 'shared.example') for i in range(130)]
+        manager = self._manager(profiles)
+        scheduler = manager._latencyScheduler
+        sink = QtCore.QObject()
+        scheduler.tcpingEngine = sink
+        try:
+            manager.testTcping(profiles)
+            oldRequest = next(iter(scheduler.tcpingRequests))
+            scheduler.handleTcpingResult(oldRequest, '5ms')
+            scheduler.drainTcpingResults()
+            manager.cancelAll()
+            processQtEvents()
+            self.assertEqual(sum(p.metadata.latency == '5ms' for p in profiles), 64)
+            self.assertFalse(scheduler.tcpingRequests)
+            self.assertFalse(scheduler.tcpingEndpointRequests)
+            self.assertFalse(scheduler.tcpingCompletionQueue)
+            manager.testTcping(profiles[-1:])
+            scheduler.handleTcpingResult(oldRequest, 'late')
+            newRequest = next(iter(scheduler.tcpingRequests))
+            scheduler.handleTcpingResult(newRequest, '9ms')
+            processQtEvents()
+            self.assertEqual(profiles[-1].metadata.latency, '9ms')
+        finally:
+            scheduler.tcpingEngine = None
+            sink.deleteLater()
+
+    def testShutdownClosesTestAdmission(self):
+        """A retained shutdown manager cannot silently acquire new work."""
+        profile = self._profile('profile', 'example.test')
+        manager = self._manager((profile,))
+        manager.shutdown()
+        with mock.patch.object(
+            manager._latencyScheduler, 'enqueue'
+        ) as latency, mock.patch.object(
+            manager._concurrentDownloadScheduler, 'enqueue'
+        ) as download:
+            manager.testPing((profile,))
+            manager.testTcping((profile,))
+            manager.testDownloadSpeed((profile,))
+        latency.assert_not_called()
+        download.assert_not_called()
+
     def testDefaultConcurrencyKeepsBlockingPingInPrivateHalfCpuPool(self):
         """Keep blocking Ping off shared workers with the requested default limit."""
         manager = ProfileTestManager(profilesProvider=lambda: self.profiles)

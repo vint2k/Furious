@@ -206,6 +206,7 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
         self.filterComboBox.setMinimumWidth(180)
 
         self.searchLineEdit = AppQLineEdit()
+        self.searchLineEdit.setClearButtonEnabled(True)
         self.searchLineEdit.setPlaceholderText(
             _('Search logs with text or regular expressions')
         )
@@ -288,10 +289,21 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
         filterLayout.addWidget(self.filterLabel)
         filterLayout.addWidget(self.filterComboBox)
 
+        self.emptyState = QWidget(parent=self)
+        emptyLayout = QHBoxLayout(self.emptyState)
+        emptyLayout.setContentsMargins(0, 0, 0, 0)
+        self.emptyStateLabel = AppQLabel(
+            _('No logs match the current filters.'), parent=self.emptyState
+        )
+        self.emptyStateLabel.setWordWrap(True)
+        emptyLayout.addWidget(self.emptyStateLabel, 1)
+        self.emptyState.hide()
+
         centralLayout = QVBoxLayout()
         centralLayout.setContentsMargins(20, 18, 20, 20)
         centralLayout.setSpacing(14)
         centralLayout.addLayout(filterLayout)
+        centralLayout.addWidget(self.emptyState)
         centralLayout.addWidget(self.textBrowser)
 
         centralWidget = QWidget()
@@ -475,6 +487,7 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
 
         if invalidate:
             self._representationInvalid = True
+            self.emptyState.hide()
 
         if not self._pageCanRender():
             return
@@ -726,6 +739,10 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
         self._entryCursor = batch.cursor
         self._renderedSequence = batch.cursor.sequence
         self._entriesDirty = False
+        self.emptyState.setVisible(
+            not self._renderedEntries
+            and (self._searchRegex is not None or selectedCategoryId != ALL_LOGS_FILTER)
+        )
 
     def _scheduleHighlight(self, firstBlock: int):
         """Coalesce incremental highlighting from the earliest changed block."""

@@ -27,6 +27,7 @@ from Furious.Repository import *
 from Furious.Plugins import getPluginRegistry
 from Furious.Qt import *
 from Furious.Qt import gettext as _
+from Furious.Qt.Signals import connectWeakly
 from Furious.Service import (
     ConnectivityManager,
     TrafficStatsManager,
@@ -706,6 +707,17 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
             popupMenu=self.serverMenu,
         )
 
+        self.importMenu = AppQMenu(
+            *self.userServersQTableWidget.importActions, parent=self
+        )
+        self.importButton = AppQMenuPushButton(
+            _('Import'),
+            icon=bootstrapIcon('lightning-charge.svg'),
+            popupMenu=self.importMenu,
+            parent=self,
+        )
+        self.importButton.setEnabled(bool(self.userServersQTableWidget.importActions))
+
         self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.NoContextMenu)
 
         # TODO: Custom status tip
@@ -754,6 +766,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
         self.tunModeSwitch.syncChecked(AppSettings.isStateON_('VPNMode'))
 
         self.searchLineEdit = AppQLineEdit()
+        self.searchLineEdit.setClearButtonEnabled(True)
         self.searchLineEdit.setPlaceholderText(
             _(
                 'Search servers with text or regex, e.g. trojan, hk|jp, ^vmess, (us|sg).*tls'
@@ -797,13 +810,34 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
         self.actionLayout.setContentsMargins(0, 0, 0, 0)
         self.actionLayout.setSpacing(8)
         self.actionLayout.addWidget(self.serverButton)
+        self.actionLayout.addWidget(self.importButton)
         self.actionLayout.addStretch(1)
         self.actionLayout.addWidget(self.subscriptionFilterComboBox)
 
         self._layout.addLayout(self.headerLayout)
         self._layout.addLayout(self.connectionLayout)
         self._layout.addLayout(self.actionLayout)
+        self.emptyState = QWidget(parent=self)
+        emptyLayout = QHBoxLayout(self.emptyState)
+        emptyLayout.setContentsMargins(0, 0, 0, 0)
+        self.emptyStateLabel = AppQLabel(translatable=False, parent=self.emptyState)
+        self.emptyStateLabel.setWordWrap(True)
+        emptyLayout.addWidget(self.emptyStateLabel, 1)
+        self._layout.addWidget(self.emptyState)
         self._layout.addWidget(self.userServersQTableWidget, 1)
+
+        for model in (
+            self.userServersQTableWidget.sourceModel,
+            self.userServersQTableWidget.proxyModel,
+        ):
+            for signal in (
+                model.rowsInserted,
+                model.rowsRemoved,
+                model.modelReset,
+                model.layoutChanged,
+            ):
+                connectWeakly(signal, self, 'refreshEmptyState', sender=model)
+        self.refreshEmptyState()
 
         self.searchButton.clicked.connect(
             lambda: self.userServersQTableWidget.search(self.searchLineEdit.text())
@@ -848,6 +882,21 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
         self.setConnectionControlsEnabled(AppConnectionController().interactionEnabled)
 
         self.setCentralWidget(self._widget)
+
+    @QtCore.Slot()
+    def refreshEmptyState(self, *_args):
+        """Explain empty storage separately from an empty filtered view."""
+        table = self.userServersQTableWidget
+        empty = table.proxyModel.rowCount() == 0
+        self.emptyState.setVisible(empty)
+        if empty:
+            self.emptyStateLabel.setText(
+                _(
+                    'No profiles yet. Use Server to add a profile, Import to load profiles, or Subscriptions to add a subscription.'
+                )
+                if table.sourceModel.rowCount() == 0
+                else _('No profiles match the current filters.')
+            )
 
     @QtCore.Slot(str)
     def _syncSystemProxyMode(self, mode: str):
@@ -1057,4 +1106,4 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
 
     def retranslate(self):
         """Refresh text owned directly by the home page."""
-        pass
+        self.refreshEmptyState()

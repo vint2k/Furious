@@ -910,40 +910,8 @@ class ServerTableView(
         )
         self._subscriptionActions = []
 
-        contextMenuActions = [
-            self.moveActionRef,
-            AppQAction(
-                _('Duplicate'),
-                callback=lambda: self.duplicateSelectedItem(),
-            ),
-            AppQAction(
-                _('Delete'),
-                callback=lambda: self.deleteSelectedItem(),
-                shortcut=QtCore.QKeyCombination(
-                    QtCore.Qt.Key.Key_Delete,
-                ),
-            ),
-            self.moveToSubscriptionActionRef,
-            AppQSeparator(),
-            AppQAction(
-                _('Select All'),
-                callback=lambda: self.selectAll(),
-                shortcut=QtCore.QKeyCombination(
-                    QtCore.Qt.KeyboardModifier.ControlModifier,
-                    QtCore.Qt.Key.Key_A,
-                ),
-            ),
-            AppQSeparator(),
-            self.activateSelectedServerActionRef,
-            AppQAction(
-                _('Scroll To Activated Server'),
-                callback=lambda: self.scrollToActivatedItem(),
-                shortcut=QtCore.QKeyCombination(
-                    QtCore.Qt.KeyboardModifier.ControlModifier,
-                    QtCore.Qt.Key.Key_G,
-                ),
-            ),
-            AppQSeparator(),
+        self.importActions = tuple(importActionsFactory())
+        self.testActions = (
             AppQAction(
                 _('Test Ping Latency'),
                 callback=lambda: self.testSelectedItemPingLatency(),
@@ -979,10 +947,52 @@ class ServerTableView(
                     QtCore.Qt.Key.Key_R,
                 ),
             ),
+            AppQAction(
+                _('Stop All Tests'),
+                callback=self.profileTestManager.cancelAll,
+                parent=self,
+            ),
+        )
+
+        contextMenuActions = [
+            self.moveActionRef,
+            AppQAction(
+                _('Duplicate'),
+                callback=lambda: self.duplicateSelectedItem(),
+            ),
+            AppQAction(
+                _('Delete'),
+                callback=lambda: self.deleteSelectedItem(),
+                shortcut=QtCore.QKeyCombination(
+                    QtCore.Qt.Key.Key_Delete,
+                ),
+            ),
+            self.moveToSubscriptionActionRef,
+            AppQSeparator(),
+            AppQAction(
+                _('Select All'),
+                callback=lambda: self.selectAll(),
+                shortcut=QtCore.QKeyCombination(
+                    QtCore.Qt.KeyboardModifier.ControlModifier,
+                    QtCore.Qt.Key.Key_A,
+                ),
+            ),
+            AppQSeparator(),
+            self.activateSelectedServerActionRef,
+            AppQAction(
+                _('Scroll To Activated Server'),
+                callback=lambda: self.scrollToActivatedItem(),
+                shortcut=QtCore.QKeyCombination(
+                    QtCore.Qt.KeyboardModifier.ControlModifier,
+                    QtCore.Qt.Key.Key_G,
+                ),
+            ),
+            AppQSeparator(),
+            *self.testActions,
             AppQSeparator(),
             self.advancedActionRef,
             AppQSeparator(),
-            *importActionsFactory(),
+            *self.importActions,
             AppQSeparator(),
             AppQAction(
                 _('Export Share Link To Clipboard'),

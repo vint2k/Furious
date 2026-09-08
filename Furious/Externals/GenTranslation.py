@@ -102,7 +102,8 @@ TRANSLATION = {
     },
     "Import": {
         "source": [
-            "Furious.Actions.Import"
+            "Furious.Actions.Import",
+            "Furious.Window.HomePage"
         ],
         "RU": "Импорт",
         "ZH": "导入",
@@ -3306,6 +3307,38 @@ TRANSLATION = {
         ],
         "RU": "Трафик / Срок",
         "ZH": "用量 / 到期",
+        "isReviewed": "True"
+    },
+    "Stop All Tests": {
+        "source": [
+            "Furious.Widget.ServerTableView"
+        ],
+        "RU": "Остановить все тесты",
+        "ZH": "停止所有测试",
+        "isReviewed": "True"
+    },
+    "No profiles yet. Use Server to add a profile, Import to load profiles, or Subscriptions to add a subscription.": {
+        "source": [
+            "Furious.Window.HomePage"
+        ],
+        "RU": "Профилей пока нет. Добавьте профиль через меню «Сервер», загрузите профили через «Импорт» или добавьте подписку в разделе «Подписки».",
+        "ZH": "暂无配置。通过“服务器”添加配置，通过“导入”加载配置，或在“订阅”中添加订阅。",
+        "isReviewed": "True"
+    },
+    "No profiles match the current filters.": {
+        "source": [
+            "Furious.Window.HomePage"
+        ],
+        "RU": "Нет профилей, соответствующих текущим фильтрам.",
+        "ZH": "没有符合当前筛选条件的配置。",
+        "isReviewed": "True"
+    },
+    "No logs match the current filters.": {
+        "source": [
+            "Furious.Window.LogPage"
+        ],
+        "RU": "Нет записей журнала, соответствующих текущим фильтрам.",
+        "ZH": "没有符合当前筛选条件的日志。",
         "isReviewed": "True"
     }
 }

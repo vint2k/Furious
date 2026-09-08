@@ -45,7 +45,7 @@ strategy in an individual test.
 | Controller state and error transitions with injected runtimes | `test_controllers.py` |
 | SOCKS and SIP002 Shadowsocks codecs and generated round trips | `test_socks_uri.py`, `test_shadowsocks_uri.py` |
 | Subscription workflow, worker responsiveness, stale requests, reconciliation, and deterministic scale | `test_subscription_manager.py`, `test_subscription_sync.py`, `test_subscription_scalability.py` |
-| Service-first profile-test identity, explicit results, endpoint deduplication, adaptive Tcping, cancellation, late callbacks, and worker/thread lifetime | `test_profile_test_jobs.py` |
+| Service-first profile-test identity, explicit results, endpoint deduplication, adaptive Tcping, reusable Stop All cancellation, shutdown admission, late callbacks, and worker/thread lifetime | `test_profile_test_jobs.py` |
 | External process launch, output, shutdown, threads, TUN metadata | `test_external_core.py` |
 | Backend structured-editor observational load and unknown-value preservation | `test_backend_editor_contract.py` |
 | Xray asset checksum validation and atomic replacement | `test_xray_asset_download.py` |
@@ -55,12 +55,13 @@ strategy in an individual test.
 | Bounded service work, update validation, plugin UI, and worker lifetime | `test_service_runtime.py` |
 | Frozenlib state helpers and mocked platform-operation boundaries | `test_frozenlib.py` |
 | Settings sandbox, navigation overlay behavior, public exports, and scale/theme isolation | `test_isolation_and_navigation.py`, `test_public_api.py`, `test_layout_matrix.py` |
+| Shared Fluent visual states and native line-edit clear-button alignment, theme changes, and interaction | `test_stylesheet_states.py` |
 | Theme cross-fade activation, interruption, multi-window cleanup, and animation policy | `test_theme_transition.py` |
 | AppQMainWindow lifecycle, subclass policies, geometry restoration, and migration | `test_main_window_geometry.py` |
 | AppQDialog first-presentation geometry, native show paths, centering, and async lifetime | `test_dialog_geometry.py` |
 | Editor mappings, lazy log rendering, routing/message-box/connection UI | `test_ui_behavior.py` |
 | Bounded, incremental, cancellable QR export and snapshot/lifetime safety | `test_qr_export_scalability.py` |
-| Real keyboard/mouse/focus, proxy mapping, shared Home/Settings state, and transient editor input | `test_qt_interactions.py` |
+| Real keyboard/mouse/focus, proxy mapping, shared Home/Settings state, Home empty/filter recovery and shared menus, and transient editor input | `test_qt_interactions.py` |
 | Direct Qt ownership and destruction across independent UI families | `test_qt_lifetime.py` |
 | Batched real/probe Qt object, QR rendering/window lifecycle, handle, Python allocation, and RSS trends | `test_qt_stress.py` |
 | Repeated harmless subprocess, pipe, thread, handle, and RSS trends | `test_process_stress.py` |
