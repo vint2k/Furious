@@ -35,11 +35,14 @@ domain, persistence, orchestration, platform integration, and presentation; nest
 
 ## Change routing
 
-- Controllers publish shared state and coordinate owners; they do not own transient UI or long-running worker
-  resources. Services do not create pages/message boxes. Widgets issue commands and present outcomes rather than
-  absorbing workflow orchestration.
-- Plugin registries own process-lifetime plugins, descriptors, and factories—not factory-created widgets, active
-  runtimes, replies, or controller state. Bundled backends/extensions obey the same contracts as entry-point plugins.
+- Controllers publish shared state and coordinate resource-owning services. New service APIs publish outcomes for UI
+  consumers rather than create presentation. Existing update-service dialogs and settings/controller prompts are
+  compatibility paths, not evidence of a strict UI-free service/controller layer; preserve callers until
+  deliberately separating those responsibilities. Widgets should not absorb new workflow orchestration.
+- Plugin registries index process-lifetime plugins, descriptors, and capabilities. Created editors and active
+  runtimes transfer to explicit UI/workflow owners. A capability may own a reusable service, such as asset updating,
+  but that service still needs a cleanup boundary. Built-ins use the public capability contract; existing
+  global-access helpers are host integration, not an extra requirement for external plugins.
 - Keep GUI work bounded, cross worker results through the owning Qt thread, and define cancellation/supersession for
   every asynchronous workflow. Page visibility may control rendering, never ownership of collection or draining.
 - Preserve unknown/forward-compatible fields through model, repository, backend editor, and serialization changes.
@@ -54,3 +57,6 @@ domain, persistence, orchestration, platform integration, and presentation; nest
   repositories, plugins, services, backends, Qt ownership, translations, or bundled data. A missing child guide means
   this file and the root guide are sufficient; do not recreate one merely to restate them. Existing child guides are
   established scopes: clarify inheritance or local invariants rather than deleting or consolidating them.
+- `tests/test_public_api.py` and `tests/test_plugin_architecture.py` are starting points for import/export
+  boundaries; consult the relevant behavior module in `tests/README.md` as well. Update this boundary map when
+  ownership changes, without turning the present import graph into a ban on deliberate refactoring.

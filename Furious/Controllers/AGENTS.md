@@ -7,25 +7,32 @@ transitions, not owners of execution resources or presentation objects.
 
 - Controllers own process-lifetime shared state and transition policy. They coordinate injected repositories/services
   and publish structured Qt signals; they do not own transient widgets, network replies, core processes, or worker pools.
-- `ConnectionController` is the sole connection state machine. A GUI start remains `Connecting` while one generation-
-  checked `ConnectionManager` transaction acquires readiness/TUN resources; System Proxy and the active-profile commit
-  occur only after success. Disconnect/reconnect cancels the exact in-flight generation and ignores stale completion.
+- `ConnectionController` is the sole connection state machine. A GUI start remains `Connecting` while one
+  generation- checked `ConnectionManager` transaction acquires readiness/TUN resources. The selected live profile is
+  exposed during `Connecting`; successful runtime commit precedes System Proxy setup and `Connected`. Failure resets
+  the active profile. Disconnect/reconnect cancels the exact in-flight generation and ignores stale completion.
 - Preserve state and signal ordering, interaction gating, the exact selected `ServerProfile`, runtime snapshots,
   reconnect preference, and rollback after validation, runtime, TUN, System Proxy, cancellation, or unexpected-exit
   failure. Worker/native callbacks cross to the controller’s Qt thread before transition.
 - A startup completion must belong to the current controller generation before it can change state, active profile,
   System Proxy, or interaction gating. Typed runtime failures keep their semantic reason; cancellation and supersession
   are not rewritten as generic connection errors.
-- `RoutingController` owns available capability options plus selected/persisted routing. Distinguish a newly selected
-  repository profile from the profile snapshot already owned by a live connection; changes use controlled reconnect,
-  not mutation of the running document. User-defined routing labels are semantic data, not translatable UI literals.
-- `SettingsController` is the shared policy path used by Home, Settings, tray, and platform integration. Validate
-  availability and complete host effects before persisting success; UI surfaces render its signals rather than keeping
-  duplicate preference state.
+- `RoutingController` owns available capability options plus selected/persisted routing. Distinguish a newly
+  selected repository profile from the active-profile reference and the independent runtime document; changes use
+  controlled reconnect, not mutation of the running document. User-defined routing labels are semantic data, not
+  translatable UI literals.
+- `SettingsController` is the shared policy path used by Home, Settings, tray, and platform integration. Startup
+  registration persists only after host success; other preferences may apply immediately or on the next connection.
+  Preserve each setting's actual application timing instead of imposing one transaction order on all preferences.
+- System Proxy helpers currently log some host failures without raising. Controller exception-path tests prove
+  recovery when an error reaches the controller, not that every OS failure is propagated. Keep desired proxy mode
+  distinct from observed host state when evolving this boundary.
 
 ## Verification and evolution
 
-- Test exact states and signal counts for async success, invalid input, supersession, cancellation, partial acquisition,
-  System Proxy failure, unexpected exit, routing refresh/reconnect, startup restoration, failed host settings, missing
-  partial-startup dependencies, and repeated shutdown. If ownership moves deliberately, update this guide and the
-  affected controller tests instead of keeping a compatibility controller as a second authority.
+- Test exact states and signal counts for async success, invalid input, supersession, cancellation, partial
+  acquisition, System Proxy failure, unexpected exit, routing refresh/reconnect, startup restoration, failed host
+  settings, missing partial-startup dependencies, and repeated shutdown. If ownership moves deliberately, update
+  this guide and the affected controller tests instead of keeping a compatibility controller as a second authority.
+  Start with `tests/test_controllers.py`, `tests/test_connection_startup_async.py`, and the shared-state cases in
+  `tests/test_qt_interactions.py`.

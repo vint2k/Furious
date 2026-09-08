@@ -18,9 +18,10 @@ and test-tier selection; test convenience never weakens a production invariant.
 
 ## Test the contract
 
-- Assert public semantic behavior and architectural invariants, not private coordinates, incidental call order, or one
-  implementation's cache. Cover success, invalid input, timeout/cancel, stale/partial completion, rollback, cleanup, and
-  compatible persisted input where applicable.
+- Assert semantic behavior and architectural invariants, not private coordinates or incidental call order. Internal
+  counters/registries are valid evidence when ownership, reclamation, or complexity is the contract; pair them with
+  an observable result instead of treating every implementation detail as forbidden. Cover success, invalid input,
+  timeout/cancel, stale/partial completion, rollback, cleanup, and compatible persisted input where applicable.
 - For staged changes, fail immediately before commit and prove live plus persisted state is unchanged. Test a
   post-commit side-effect failure separately. Keep persisted-profile assertions distinct from runtime-copy output.
 - Use stable profile/subscription identities in reconciliation and async tests. Exercise supersession, removal/reorder,
@@ -33,11 +34,19 @@ and test-tier selection; test convenience never weakens a production invariant.
 
 ## Tiers and maintenance
 
-- Run the narrow module first, then the affected tier documented in `tests/README.md`. The release-confidence tier is
+- Use `python -m unittest tests.<module> -v` from the root for focused work and `python -m unittest discover -s
+  tests -v` for full source-suite discovery (opt-in tests still skip). The runner is unittest, not pytest. Run the
+  narrow module first, then the affected tier documented in `tests/README.md`. The release-confidence tier is
   explicitly opt-in with `FURIOUS_VERY_HEAVY_TESTS=1`; packaged/manual smoke work uses disposable environments.
+- Source-only tests and an offscreen platform do not prove a packaged Qt runtime. Compiler-sensitive changes need
+  the relevant native lifecycle module and a separate compiled probe; report skipped or unavailable targets
+  explicitly. The release workflow currently builds/checks artifacts without running this source behavioral suite.
 - Benchmarks report scale and latency but are not correctness gates. Keep deterministic scale assertions in normal or
   stress tests and avoid machine-dependent elapsed-time thresholds unless the test is explicitly diagnostic.
 - Update `tests/README.md` when coverage ownership, modules, commands, tiers, opt-ins, or environment requirements change.
   The final unittest status and process exit code are authoritative even when negative paths intentionally log errors.
-- Review new tests for production-state mutation, live network dependence, process-name cleanup, unbounded waits, shared
-  mutable fixtures, order dependence, timing-only assertions, and storage assertions where runtime output is the contract.
+- Review new tests for production-state mutation, live network dependence, process-name cleanup, unbounded waits,
+  shared mutable fixtures, order dependence, timing-only assertions, and storage assertions where runtime output is
+  the contract. For guidance-only changes, verify path preservation, changed-file scope, referenced commands/tests,
+  and contradictory claims; run existing behavior tests only to resolve architecture uncertainty rather than adding
+  tests of prose.

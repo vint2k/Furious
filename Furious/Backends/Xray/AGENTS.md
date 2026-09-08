@@ -1,6 +1,7 @@
 # Xray guidance
 
-Inherit the common backend and plugin rules. This scope owns Xray's full JSON preservation, routing/assets/statistics,
+Inherit the root, package, and common backend guides; consult Plugins for capability contracts. This scope owns Xray's
+full JSON preservation, routing/assets/statistics,
 and protocol/transport/TLS projections.
 
 ## Full-document preservation
@@ -17,14 +18,20 @@ and protocol/transport/TLS projections.
 
 ## Runtime-specific capabilities
 
-- Logging paths, selected routing, statistics API, local test endpoints, and TUN are prepared on an independent runtime
-  copy. Managed native TUN replaces runtime TUN inbounds; disabled management preserves explicit valid or malformed TUN
-  and suppresses tun2socks. Proxy/download tests replace inbounds with their proxy-only test surface.
+- Logging paths, selected routing, statistics API, local test endpoints, and TUN are prepared on an independent
+  runtime copy. Managed native TUN replaces runtime TUN inbounds; disabled management preserves explicit valid or
+  malformed TUN and suppresses tun2socks. Proxy/download preparation replaces inbounds with its test surface. Verify
+  the prepared document rather than assuming `proxyModeOnly` alone removes user TUN from every factory input.
 - Xray owns routing profiles/options, geo assets, API statistics, and the `XRAY_LOCATION_ASSET` environment contract.
   Asset replacement remains digest-verified and atomic; action providers retain reusable routing/asset windows only
   through the created action owner and create transient settings dialogs per request.
-- Asset downloads stage bytes and digest verification before replacing the live file. A failed request, checksum, or
-  write leaves the prior usable asset intact and reports the failure without pretending an update succeeded.
-- Verify full-document and URI preservation, aliases and unknown values, runtime-copy isolation for routing/log/TUN/tests,
-  multiple TUN inbounds, asset integrity/failure, statistics and process cleanup, compiled-safe UI callbacks, and
-  repeated editor/window destruction. Update this scope when an upstream or plugin capability changes intentionally.
+- Runtime asset updates stage bytes and digest verification before atomic replacement. Failure preserves the prior
+  usable file. Distinguish this updater from `Deploy.py --download`, whose download/integrity behavior must be
+  inspected separately; shared filenames do not make the two mechanisms equivalent.
+- Routing selection IDs, user routing documents, and translated built-in labels are different contracts. Preserve
+  custom document content and named-profile identity while composing runtime routing/API statistics.
+- Verify full-document and URI preservation, aliases and unknown values, runtime-copy isolation for
+  routing/log/TUN/tests, multiple TUN inbounds, asset integrity/failure, statistics and process cleanup,
+  compiled-safe UI callbacks, and repeated editor/window destruction. Use `tests/test_xray_asset_download.py`,
+  `tests/test_native_tun_semantics.py`, and `tests/test_backend_editor_contract.py`. Update this scope when a
+  verified backend capability changes intentionally.

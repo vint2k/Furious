@@ -1,6 +1,7 @@
 # Window and page guidance
 
-Inherit the root, package, Qt, widget, controller, and service guides. This scope owns persistent page composition and
+Inherit the root and package guides. Consult Qt/Widget for presentation and Controllers/Service for shared owners.
+This scope owns persistent page composition and
 top-level presentation, not shared domain state.
 
 ## Composition and shared state
@@ -25,15 +26,23 @@ top-level presentation, not shared domain state.
 - A page that creates a service must make its process-lifetime or page-lifetime ownership explicit and expose one
   cleanup path through the containing window/application. Moving a service between pages must not duplicate schedules,
   histories, requests, or controller connections during the transition.
-- One-shot editors/prompts use managed transient dialogs and weak compiled-safe continuations. Reusable windows such as
-  the text editor and parent-owned settings dialogs retain one explicit owner, reset on reopen, and use normal close
-  semantics; do not convert every top-level surface to delete-on-close or global retention.
+- One-shot editors/prompts use managed transient dialogs and weak compiled-safe continuations. Reusable text/editor
+  windows and retained settings dialogs need an explicit owner and reopen policy. A settings label or Qt parent does
+  not determine lifetime: check the actual base class and close/accept/reject path before changing deletion policy.
 - Use normal layouts and `AppQ*` controls. Restore top-level geometry only after persistent composition and through the
   canonical first-show path; never-shown Qt fallback geometry must not overwrite a prior user decision.
+- QR export captures capped independent profile snapshots before deferred work. Incremental generation is owned by
+  the result window and stops on close; a malformed item cannot retarget or invalidate completed tabs. Resizing
+  scales the cached module image at integer factors with its quiet zone, rather than regenerating or smoothing
+  secret-bearing QR content. Reuse plugin export semantics and never log the encoded URI.
+- Log views keep per-filter cursors and catch up on visibility; metrics pages derive series from shared raw history.
+  Switching pages, ranges, or filters must not reset collection or create a second history.
 
 ## Verification and evolution
 
-- Verify initial/plugin navigation, shared Home/Settings/tray state, service ownership, lazy rendering versus continuous
-  collection, async continuation cleanup, unsaved-close behavior, translation/theme changes, geometry migration, and
-  repeated open/show/hide/destroy stability with real Qt input where semantics depend on it. Keep this guide as current
-  architectural memory: change it with intentional page ownership, not after forcing new code through stale structure.
+- Verify initial/plugin navigation, shared Home/Settings/tray state, service ownership, lazy rendering versus
+  continuous collection, async continuation cleanup, unsaved-close behavior, translation/theme changes, geometry
+  migration, and repeated open/show/hide/destroy stability with real Qt input where semantics depend on it. Keep
+  this guide as current architectural memory: change it with intentional page ownership, not after forcing new code
+  through stale structure. Relevant anchors include `tests/test_ui_behavior.py`,
+  `tests/test_qr_export_scalability.py`, `tests/test_metrics_behavior.py`, and `tests/test_main_window_geometry.py`.

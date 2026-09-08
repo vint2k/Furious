@@ -23,9 +23,15 @@ presentation without becoming a workflow authority.
   transient/repeated receiver uses the weak named-method facilities required by `Furious/Qt/AGENTS.md`.
 - Clipboard text, files, QR images, share links, and plugin results are untrusted and may contain credentials. Bound
   diagnostic excerpts and never log or echo a complete secret-bearing payload merely to explain a parse failure.
-- Long-running capture/import/export presentation owns one cancellable operation context. Yield large GUI insertions or
-  QR rendering in bounded event-loop batches, reject callbacks after cancellation/destruction, and publish output only
-  while the operation context and its owned snapshot remain current.
-- Verify command state and delegation, cancellation/error presentation, shortcut scope in the real focused widget, menu
-  rebuild cleanup, and repeated dialog/capture/action lifetimes. When this command boundary changes intentionally, update
-  this guide and remove superseded compatibility wording in the same change.
+- Long-running capture/import/export presentation owns one cancellable operation context. Screen capture/decoding
+  workers return data for GUI-thread insertion and retain no transient windows. Yield large insertions in bounded
+  batches, reject callbacks after cancellation/destruction, and retain the captured input until terminal cleanup. QR
+  result generation belongs to its window; actions delegate instead of retaining a parallel exporter.
+- Snapshot the intended profile identities before an asynchronous confirmation or editor opens. On acceptance
+  resolve those targets again; do not apply the original gesture to whatever selection happens to exist when the
+  dialog closes.
+- Verify command state and delegation, cancellation/error presentation, shortcut scope in the real focused widget,
+  menu rebuild cleanup, and repeated dialog/capture/action lifetimes. When this command boundary changes
+  intentionally, update this guide and remove superseded compatibility wording in the same change. Use
+  `tests/test_qt_interactions.py`, `tests/test_ui_behavior.py`, and `tests/test_qt_lifetime.py` for focused
+  command/retention evidence.

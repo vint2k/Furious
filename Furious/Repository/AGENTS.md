@@ -1,7 +1,7 @@
 # Repository guidance
 
-Inherit the root, package, interface, and model guides. This scope owns restoration, migration, ordering, and durable
-collection commits; workflows and presentation remain outside it.
+Inherit the root and `Furious/AGENTS.md`. Consult the Interface and Models guides when changing their contracts.
+This scope owns restoration, migration, ordering, and persistence; workflows and presentation remain outside it.
 
 - Repositories restore, migrate, order, and persist profiles, subscriptions, routings, and TUN settings. They do not own
   network workflows, controller state, test schedulers, or presentation.
@@ -12,12 +12,16 @@ collection commits; workflows and presentation remain outside it.
   Active row/index and display text are compatibility/presentation state, not identity.
 - A restore failure remains observable. Automatic cleanup must not replace unreadable persisted bytes with an empty
   fallback; only an explicit successful replacement may do so.
-- Stage fallible decode, migration, or reconciliation before deterministic mutation of the live collection. A
-  subscription commit changes only that group: matched managed profiles retain stable object/profile identity and local
-  metadata, removed profiles are marked stale, and indexes/order update atomically.
-- Persistence is part of the repository commit contract, not evidence that later host/controller side effects succeeded.
-  Callers report post-commit failures separately and must not claim the durable mutation rolled back when it did not.
+- Stage fallible decode/migration before live mutation. Subscription reconciliation currently belongs to
+  `Service/SubscriptionSync.py` and commits through the compatibility live collection: matched managed profiles
+  retain object/profile identity and local metadata, removed profiles become stale, and unrelated groups remain
+  intact. Do not add a second reconciliation algorithm here merely because persistence belongs to this scope.
+- Distinguish a live-collection commit from serialization/flush and subsequent controller effects. The compatibility
+  collection can change before it is flushed; a successful in-memory synchronization is not proof of an atomic disk
+  transaction. Preserve explicit flush/cleanup behavior and report failures at the boundary that actually failed.
 - Moving a profile between subscription displays does not automatically make it remotely managed; preserve the explicit
   distinction between local membership and synchronization ownership.
 - Verify legacy/current/unknown-field round trips, malformed roots, restore-failure preservation, ordering/stable
-  identity, group isolation, reconciliation commit behavior, and persistence in temporary QSettings namespaces.
+  identity, group isolation, reconciliation commit behavior, and persistence in temporary QSettings namespaces. Use
+  `tests/test_repository_contracts.py` and `tests/test_subscription_sync.py` to revalidate this scope. Reordering a
+  filtered view must preserve hidden slots and relocate activation by profile ID, not by its former row.

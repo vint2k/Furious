@@ -1,6 +1,7 @@
 # Hysteria 1 guidance
 
-Inherit the common backend and plugin rules. This scope exists to preserve Hysteria 1's legacy flat schema and lifecycle
+Inherit the root, package, and common backend guides; consult Plugins for capability contracts. This scope exists to
+preserve Hysteria 1's legacy flat schema and lifecycle
 without importing assumptions from Hysteria 2.
 
 - Hysteria 1 is the legacy flat client schema and `hysteria://` share-link backend. Do not import Hysteria 2 nested
@@ -15,6 +16,11 @@ without importing assumptions from Hysteria 2.
   falling through another backend’s policy.
 - Treat tolerated legacy values as input compatibility, not as permission to rewrite the persisted document during
   inspection. Runtime validation may reject what observational editor loading must still preserve.
+- Routing ACL/MMDB launch inputs remain distinct from the stored connection JSON. A prepared runtime advertises its
+  local HTTP readiness endpoint separately from child liveness. The built-in factory has no statistics provider;
+  shared UI must handle that absence instead of treating it as a failed connection.
 - Verify legacy/current URI and mapping compatibility, unknown/tolerated values, stored-copy isolation, MMDB/ACL
-  absence or malformed paths, asynchronous readiness and rollback, core-exit translation, application-TUN policy, and
-  repeated editor/runtime cleanup. Revise this guide with an intentional schema evolution instead of freezing quirks.
+  absence or malformed paths, asynchronous readiness and rollback, core-exit translation, application-TUN policy,
+  and repeated editor/runtime cleanup. Use `tests/test_hysteria1_protocol.py`,
+  `tests/test_backend_editor_contract.py`, and `tests/test_connection_startup_async.py`. Revise this guide with
+  intentional schema evolution instead of freezing tolerated historical input into a universal backend rule.

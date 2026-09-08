@@ -1,13 +1,14 @@
 # Embedded runtime guidance
 
-Inherit the root, package, interface, and service rules. This scope owns reusable embedded execution machinery and
+Inherit the root and package guides. Consult Interface for runtime contracts and Service for connection ownership.
+This scope owns reusable embedded execution machinery and
 application tun2socks, while connection policy remains outside it.
 
 - `Core` supplies shared multiprocessing runtime machinery, bounded output transport, and application tun2socks. External
   Core owns its separate direct `subprocess.Popen`; neither layer owns controller, repository, UI, or protocol policy.
-- A launch spec describes only validated child construction, never semantic connection readiness. Runtime preparation
-  completes before construction; the asynchronous connection transaction observes endpoints/process survival and
-  commits later. Keep any synchronous waiting isolated as an explicit compatibility path.
+- A launch spec describes prepared child construction, never semantic connection readiness. Serialization and launch
+  arguments are prepared before execution starts; constructors may create owned timers/queues that still need
+  disposal if execution never starts. The service observes endpoints/process survival and commits later.
 - `CoreRuntime` execution state, typed terminal exit, and readiness are separate contracts. A process becoming alive is
   not proof that its proxy/TUN endpoint is ready, while a readiness timeout must not overwrite an already observed typed
   exit.
@@ -19,5 +20,8 @@ application tun2socks, while connection policy remains outside it.
   per-turn drain work; draining continues independently of Log-page visibility and backs off only when idle.
 - Parentless timers are acceptable only with a durable runtime owner and explicit disposal. Leaving the manager pool
   must not leave timers, callbacks, queues, or process handles alive.
-- Verify invalid target/serialization, failed spawn, early exit, readiness compatibility, burst output bounds/backoff,
-  normal and forced stop, repeated disposal, and absence of residual children, handles, timers, queues, or callbacks.
+- Verify invalid target/serialization, failed spawn, early exit, readiness compatibility, burst output
+  bounds/backoff, normal and forced stop, repeated disposal, and absence of residual children, handles, timers,
+  queues, or callbacks. Start with `tests/test_runtime_lifecycle.py` and `tests/test_connection_startup_async.py`;
+  output/process stress lives in the tiers documented by `tests/README.md`. Review output admission and draining
+  together when changing backpressure.

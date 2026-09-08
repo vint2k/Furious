@@ -7,11 +7,13 @@ human-reviewed translations.
 
 - `Furious/Externals/GenTranslation.py` is generator-managed, but its language values and `isReviewed` flags are curated
   data. Repository-root `Translation.py` owns source extraction and catalog structure; neither file is disposable.
-- Run `Translation.py --target <language>` with the repository interpreter after changing translatable source or curated
-  wording. It rebuilds source membership, drops stale keys, preserves reviewed target text, initializes unresolved text,
-  detects target collisions, and writes deterministic key order.
-- Entry key order is `source`, language keys retained by the generator, then `isReviewed`. `source` contains
-  deduplicated fully qualified modules; do not curate that list manually because extraction rebuilds it.
+- Run `python Translation.py --target <language>` with the repository interpreter for an intentional
+  extraction/update. It rebuilds source membership, drops stale keys, preserves reviewed target text, and reports
+  collisions. Automatic translation is currently disabled: unresolved/unreviewed target values may be replaced with
+  the source text. Review the diff before treating the command as a harmless refresh, especially with `--ignore`.
+- Existing dictionary order is generally preserved; the generator does not enforce a universal field order and
+  source traversal can affect newly discovered entries. Keep diffs stable without claiming canonical sorting.
+  `source` contains deduplicated fully qualified modules and is rebuilt by extraction rather than manually curated.
 - Inspect the full diff. Preserve deliberate translations/review flags, HTML/newline semantics, and natural RU/ZH
   meaning; mark an entry reviewed only after a human has verified it. Do not hand-maintain the generated `source` module
   list.
@@ -29,7 +31,12 @@ human-reviewed translations.
 
 ## Verification
 
-- Run extraction for every affected language, review collisions/stale removal/order and the catalog diff, then run it a
-  second time to prove stability. Exercise runtime lookup and affected UI retranslation under explicit locales.
-- Translation generation is a scoped repository mutation: do not run it as an incidental formatter, and do not accept
-  broad catalog churn without tracing each changed source literal or intentional stale-key removal.
+- Run extraction for every affected language, inspect collision/unreviewed diagnostics and the complete catalog
+  diff, then run it again to check stability. Collision and write failures are logged rather than guaranteed to
+  produce a nonzero process exit; exit status alone is not validation. Exercise runtime lookup and UI retranslation
+  under explicit locales; `tests/test_models_and_services.py` and `tests/test_ui_behavior.py` cover extraction/UI
+  consumers.
+- Translation generation is a scoped repository mutation: do not run it as an incidental formatter, and do not
+  accept broad catalog churn without tracing each changed source literal or intentional stale-key removal. Update
+  this guide when extraction or review semantics change; do not generalize generator-managed membership into a ban
+  on curated text.

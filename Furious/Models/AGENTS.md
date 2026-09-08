@@ -19,13 +19,20 @@ Qt presentation, plugin discovery, or workflow execution.
   or invoking a backend runtime.
 - `ensureProfile()` normalizes rather than clones: metadata arguments update an existing profile. Use an independent
   copy for a new stored item and a runtime copy when logical identity must survive without mutating persistence.
-- Profile ID, object identity, subscription source/key, connection fingerprint, display text, and row position answer
-  different questions. Fingerprints require deterministic JSON-compatible connection data and fail explicitly.
+- Profile ID, object identity, subscription source/key, connection fingerprint, display text, and row position
+  answer different questions. Fingerprints cover only the connection document, not user metadata; they require
+  deterministic JSON-compatible values and reject non-finite numbers. A metadata edit need not invalidate connection
+  testing.
+- Subscription membership (`subscriptionSource`) and remote ownership (`subscriptionManaged` plus its matching key)
+  are separate. Legacy migration may infer ownership where the flag was absent; current locally grouped profiles
+  must remain local. Preserve that distinction through copies, moves, and metadata aliases.
 
 ## Compatibility and verification
 
 - Protocol construction/export belongs to plugin capabilities. Compatibility shims may remain while callers migrate,
   but new protocol-name branches do not belong in core models.
-- Verify malformed/current/legacy/unknown-field round trips, metadata/connection separation, copy/identity semantics,
-  deterministic fingerprints, construction/serialization diagnostics, and capability-based import/export. Revise this
-  guide with intentional domain changes; do not preserve a legacy identity rule after migration replaces it.
+- Verify malformed/current/legacy/unknown-field round trips, metadata/connection separation, copy/identity
+  semantics, deterministic fingerprints, construction/serialization diagnostics, and capability-based import/export.
+  Revise this guide with intentional domain changes; do not preserve a legacy identity rule after migration replaces
+  it. `tests/test_models_and_services.py`, `tests/test_repository_contracts.py`, and
+  `tests/test_profile_test_jobs.py` exercise these values across persistence and asynchronous consumers.

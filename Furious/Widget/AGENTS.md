@@ -1,6 +1,7 @@
 # Reusable widget guidance
 
-Inherit the root, package, and Qt guides. This scope covers reusable controls and model/view adapters below page
+Inherit the root and package guides; consult `Furious/Qt/AGENTS.md` for shared lifetime/presentation contracts. This
+scope covers reusable controls and model/view adapters below page
 composition; it does not own application workflows.
 
 ## Presentation and identity
@@ -25,10 +26,14 @@ composition; it does not own application workflows.
 - Models, delegates, headers, menus, actions, animations, spinners, WebEngine/map objects, timers, workers, and replies
   each need one owner. Persistent widgets connect once and refresh state; visibility may pause rendering/animation, not
   application-level log draining, traffic collection, or other service ownership.
-- Model notifications describe the smallest real source mutation. Never use a reset or full repaint to hide incorrect
-  proxy/source mapping, stale indexes, or missing stable-identity restoration after insert, delete, move, filter, or
-  sort.
-- Verify sorted/filtered commands, notification ranges, identity-preserving move/delete, real keyboard focus and nested
-  shortcuts, subscription/test cancellation, hidden-page rendering, exact cell updates, optional WebEngine fallback,
-  and repeated cleanup to baseline. Update this guide when ownership moves; never move service orchestration back into
-  a widget just to preserve historical wording.
+- Model notifications describe the real source mutation. Structural replacement may legitimately use a model reset;
+  metadata-only test results should update the exact cell. Do not use resets/full repaints to mask broken mapping or
+  missing identity restoration. Test selected identities and the current keyboard index independently.
+- Endpoint lookup belongs to `EndpointInfoService`; the map renders validated results and has a no-WebEngine
+  fallback. Optional WebEngine import failure must not prevent importing the widget/package, and hidden presentation
+  must not retarget a queued lookup.
+- Verify sorted/filtered commands, notification ranges, identity-preserving move/delete, real keyboard focus and
+  nested shortcuts, subscription/test cancellation, hidden-page rendering, exact cell updates, optional WebEngine
+  fallback, and repeated cleanup to baseline. Update this guide when ownership moves; never move service
+  orchestration back into a widget just to preserve historical wording. Start with `tests/test_qt_interactions.py`,
+  `tests/test_profile_test_jobs.py`, and `tests/test_endpoint_info.py`.

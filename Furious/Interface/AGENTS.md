@@ -9,9 +9,9 @@ satisfy without importing application composition or concrete backends.
 - Contracts specify observable ownership, lifecycle, mutation, serialization, callback, and failure semantics. Search
   every representative implementation and contract test before changing one; an implementation may strengthen a
   guarantee but cannot silently weaken it.
-- Keep versioned contract changes explicit. Reject unsupported shapes at the registration/boundary layer, update every
-  bundled implementation and compatibility export together, and avoid adapters that let two conflicting ownership
-  models coexist indefinitely.
+- Interface contracts and the separately versioned plugin API are different compatibility surfaces. Reject
+  unsupported shapes at their owning boundary and update implementations/exports together; do not invent a version
+  gate for every Python interface or remove an established adapter without tracing its callers.
 - `CoreRuntime` is mechanism-neutral: embedded multiprocessing, direct `subprocess`, or an in-process binding can satisfy
   it. It owns execution only: zero-argument start, passive liveness, typed terminal events, and bounded idempotent
   stop/dispose. Preparation, serialization, readiness, and startup transactions belong outside this contract. Bind its
@@ -20,8 +20,12 @@ satisfy without importing application composition or concrete backends.
 - `StorageBackend.data()` deliberately exposes a live mutable collection for compatibility. Do not reinterpret it as a
   snapshot or introduce a second authoritative cache. Editor bindings map input to configuration and back; they do not
   decide runtime, persistence, or host policy.
-- `ApplicationRunner.ExitCode` is a process-boundary protocol. Shared encoders and non-throwing configuration
-  construction preserve their distinct diagnostics so callers do not collapse every empty result into the same error.
-- Verify cheap/import-independent contracts plus representative runtime, storage, editor, application-exit, encoding,
-  and configuration implementations. Update this guide when a contract intentionally changes, together with all
-  implementers and compatibility tests.
+- `ApplicationRunner.ExitCode` is a process-boundary protocol. Model encoders may raise, while configuration
+  construction deliberately captures diagnostics; do not impose one blanket exception convention on those different
+  contracts.
+- Runtime liveness is observational: querying it must not consume an exit, transfer ownership, or dispatch
+  callbacks. Keep semantic startup errors separate from raw process codes and readiness timeouts.
+- Verify cheap/import-independent contracts plus representative runtime, storage, editor, application-exit,
+  encoding, and configuration implementations. Update this guide when a contract intentionally changes, together
+  with all implementers and compatibility tests. Start with `tests/test_interface.py` and
+  `tests/test_runtime_lifecycle.py`; include `tests/test_public_api.py` when imports or exports change.

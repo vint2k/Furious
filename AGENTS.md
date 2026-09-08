@@ -22,6 +22,11 @@
 - Add a new AGENTS file only when verified architecture has a durable uncovered scope that no existing file can
   represent. A new scope never makes an existing one disposable. Keep override files explicit about which inherited
   assumption they replace and why.
+- Before a hierarchy-wide audit, inventory tracked, untracked, hidden, and ignored AGENTS paths, including
+  overrides; record each scope and its nearest ancestor guide. At handoff compare exact path sets and Git
+  status/diff: no original path may disappear or become a rename. Default to exact equality and improve redundant
+  scopes in place.
+- Inheritance follows directory ancestry. A sibling guide identifies a contract to consult, not another parent.
 
 ## Operating model
 
@@ -46,11 +51,16 @@
   post-commit side effect is reported without pretending the commit rolled back.
 - Use stable domain identity, not table rows, proxy indexes, display text, or object position. Async results additionally
   prove that the target generation/fingerprint is still current before mutation.
+- Distinguish profile identity, subscription membership, remote synchronization ownership, and execution snapshots.
+  Moving a profile into a group does not transfer remote ownership; a running core uses its prepared document even
+  when the live profile later changes.
 - Startup and other staged workflows own every resource acquired before commit and roll back only that attempt on
   failure, cancellation, or supersession. Cleanup is bounded where responsiveness requires it, idempotent, and targets
   exact processes, threads, replies, timers, files, handles, routes, and callbacks—never process names.
-- Keep GUI-thread work bounded. Blocking host/process/network work runs behind an owned worker or asynchronous Qt
-  boundary; workers publish data back to the owning Qt thread and never mutate widgets or live repositories directly.
+- Keep new GUI-thread work bounded through an owned worker or asynchronous Qt boundary; workers publish data back to
+  the owning Qt thread and never mutate widgets or live repositories directly. Existing synchronous compatibility
+  and host-operation paths require explicit responsiveness review: an async entry point alone does not prove
+  non-blocking preparation, cancellation, or shutdown.
 - Validate user, network, persisted, and plugin data at boundaries. Keep invariant failures visible, preserve useful
   diagnostics, and never log credentials, subscription payloads, full share links, environments, or complete core
   documents.
@@ -62,7 +72,9 @@
 - Preserve unrelated and unstaged user changes. Do not revive deleted experiments from history or broaden a task to
   nearby technical debt.
 - Before Python work, prefer an existing root `.venv*`/`venv*` interpreter. Do not create or mutate an environment
-  without need. Format only touched Python files with the repository Black configuration and check them afterward.
+  without need. Format only touched Python files with `python -m black <files>`, then `python -m black --check
+  <files>`; `pyproject.toml` preserves string quotes. Syntax/import checks supplement behavior tests.
+  Documentation-only work does not require unrelated formatting or generated-file refreshes.
 - Preserve GPL headers, `from __future__` placement, import grouping, and established naming. Search consumers before
   changing public exports, plugin APIs, persisted keys/schemas, IDs, aliases, migrations, package data, or semantic exit
   codes.
@@ -82,6 +94,9 @@
 - Match evidence to the contract: round trips/migrations for models and repositories; exact transitions/signal counts
   for controllers; stale/cancel/rollback/cleanup paths for services; partial startup and resource reaping for runtimes;
   mocked OS branches for host helpers; import/discovery and packaged checks for compiler-sensitive changes.
+- Report source inspection, executed tests, mocked platform evidence, and packaged validation separately. A passing
+  source suite does not prove native distributions or every declared Python/Qt floor. Release import checks do not
+  replace behavioral tests; record untested targets and compatibility gaps explicitly.
 - Use real Qt semantics when focus, selection, keyboard modifiers, proxy mapping, event delivery, queued callbacks,
   geometry, or QObject destruction matters. Prefer semantic state and destroyed/resource counts over pixel snapshots or
   arbitrary sleeps/RSS thresholds.
@@ -101,3 +116,7 @@
   future agent would choose the correct owner and test boundary. Re-read the applicable hierarchy as a fresh agent,
   challenge rules most likely to become stale or freeze implementation, and do not record temporary implementation
   details.
+- In each affected scope, distinguish observed behavior from design requirements and identify tests/consumers that
+  can challenge the rule later. Re-read the hierarchy for circular references and rules that freeze incidental
+  structure. During guidance-only work, record code defects separately instead of changing production code to
+  satisfy the prose.

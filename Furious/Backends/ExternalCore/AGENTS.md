@@ -1,6 +1,7 @@
 # External Core guidance
 
-Inherit the backend and plugin rules. This file preserves the intentionally different direct-subprocess scope for
+Inherit the root, package, and common backend guides; consult Plugins for capability contracts. This file preserves
+the intentionally different direct-subprocess scope for
 user-selected executables.
 
 ## Structured executable boundary
@@ -23,7 +24,13 @@ user-selected executables.
 - Application tun2socks is an explicit profile capability. It requires a usable SOCKS endpoint and a separate remote
   server address for bypass routing; an executable path is never a network destination, and this backend never invents
   native core TUN support. Subscription decoding must continue to reject executable profiles.
-- Verify unknown-field and editor round trips, path/argument/environment validation, paths with spaces, immediate-exit
-  failure, complete and partial output, exact callback/reader/watcher cleanup, repeated stop/dispose, TUN opt-in and
-  remote-address handling, subscription rejection, and transient editor destruction. Update this guide when the process
-  contract evolves rather than preserving today’s implementation mechanically.
+- This is a mapping-only protocol: its explicit type discriminator selects local executable configuration, it
+  declares no URI schemes, and portable URI/QR export may return no result. Shared import/export UI must preserve
+  that capability absence. Endpoint readiness checks the configured proxy; it does not validate an arbitrary
+  executable's remote service.
+- Verify unknown-field and editor round trips, path/argument/environment validation, paths with spaces,
+  immediate-exit failure, complete and partial output, exact callback/reader/watcher cleanup, repeated stop/dispose,
+  TUN opt-in and remote-address handling, subscription rejection, and transient editor destruction. Update this
+  guide when the process contract evolves rather than preserving today’s implementation mechanically. Start with
+  `tests/test_external_core.py` and `tests/test_backend_editor_contract.py`. A failed final reap is a cleanup
+  failure to report; elapsed stop deadlines alone do not prove that the OS process or all descendants have exited.

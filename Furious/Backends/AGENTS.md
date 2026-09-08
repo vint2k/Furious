@@ -1,13 +1,14 @@
 # Backend guidance
 
-Inherit the root, package, plugin, model, and service contracts. This scope adds rules shared by all bundled proxy
+Inherit the root and package guides. Consult Plugins/Models/Service for the contracts consumed by this scope. This
+scope adds rules shared by all bundled proxy
 backends without making the richest backend the generic default.
 
 ## Common backend contract
 
-- A backend plugin owns its configuration/document types, parsing/export, validation, editor factories, runtime factory,
-  and supported routing, TUN, statistics, settings, actions, or assets. Shared code asks capabilities and never branches
-  on core names.
+- A backend supplies the subset of protocol, editor, execution, routing, TUN, statistics, settings, action, and
+  asset capabilities it actually supports. Shared code dispatches capabilities; a built-in backend with no
+  statistics, URI export, or download-test implementation remains valid.
 - The complete persisted core document is authoritative. Prepare logging, routing, endpoints, probes, and TUN on an
   independent runtime copy; failed preparation must not mutate the stored profile.
 - Structured editors are partial projections. Loading is observational except for a narrow documented migration;
@@ -20,11 +21,13 @@ backends without making the richest backend the generic default.
 
 ## TUN and runtime policy
 
-- Global TUN first asks the selected runtime factory to prepare native TUN on the copy. Managed native TUN replaces the
-  backend's runtime TUN; disabled management preserves any explicit user TUN—even malformed, so the core can reject it.
-  Either native case suppresses application tun2socks; only absence may permit the fallback.
-- Proxy/download-test copies explicitly remove native TUN. A managed-native-TUN preparation failure is terminal rather
-  than permission to silently switch implementations.
+- Global TUN asks the selected runtime factory about native ownership and application tun2socks. For backends
+  exposing native TUN, managed mode replaces that backend's TUN projection on the runtime copy; disabled management
+  preserves explicit user TUN, even malformed for runtime rejection. External Core instead declares host-tun2socks
+  opt-in; do not infer its executable's private document format or impose Xray/Hysteria2-native rules on it.
+- Supported proxy/download-test preparation explicitly strips native TUN from the copied document. The generic
+  `proxyModeOnly` request does not sanitize arbitrary plugin configuration by itself. Required managed-native-TUN
+  rejection raises `TUNPreparationError`; do not silently switch implementations.
 - A runtime owns its exact process/thread/readers/monitors and publishes an actionable start error. Stop/dispose is
   bounded, idempotent, and correct after partial acquisition.
 - Runtime factories follow the current plugin contract: fully prepare and return one owned launch whose zero-argument
@@ -41,6 +44,9 @@ backends without making the richest backend the generic default.
 
 ## Verification
 
-- Test mapping/document/URI round trips; malformed, legacy, and unknown input; untouched-editor preservation; persisted
-  immutability; exact runtime/probe documents; every native/application-TUN case; startup/rollback/cleanup; assets and
-  statistics where applicable; plugin discovery; and repeated editor/dialog destruction.
+- Test mapping/document/URI round trips; malformed, legacy, and unknown input; untouched-editor preservation;
+  persisted immutability; exact runtime/probe documents; every native/application-TUN case;
+  startup/rollback/cleanup; assets and statistics where applicable; plugin discovery; and repeated editor/dialog
+  destruction. Start with `tests/test_backend_editor_contract.py`, `tests/test_native_tun_semantics.py`, and
+  `tests/test_plugin_architecture.py`. Revalidate these shared rules against a minimally capable backend whenever a
+  capability changes.

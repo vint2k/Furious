@@ -1,5 +1,8 @@
 # Release workflow guidance
 
+Inherit repository-wide rules from the root `AGENTS.md`. This scope owns build/publication evidence and target-specific
+exceptions; it does not define the source test suite or imply that every package dependency is pinned.
+
 ## Publication and matrix contract
 
 - `workflows/deploy-pypi.yml` is both packaging coverage and the publication graph. Pull requests and ordinary pushes
@@ -30,3 +33,8 @@
 - Validate YAML and every affected expression/shell. Trace each changed matrix row through dependency installation,
   source/native import checks, Nuitka/installer output, packaged architecture/dependency checks, artifact upload, and tag
   gates. When a target cannot run locally, add a narrow CI assertion that fails before publication with a useful reason.
+- The current workflow performs packaging/import/native checks but does not run the unittest behavioral suite. Do
+  not call an artifact build a regression-test pass; use `tests/README.md` for source verification. Check actual
+  `needs` and tag gates rather than assuming a downstream publish job runs on every build.
+- Revalidate version/architecture claims against the current matrix instead of duplicating all pins here. When build
+  topology intentionally changes, update this scope and follow every consumer through upload and publication.

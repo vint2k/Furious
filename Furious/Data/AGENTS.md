@@ -16,13 +16,17 @@ application-data or settings directory.
 
 ## Local endpoint map
 
-- The MapLibre document is an offline/privacy boundary. Keep executable code, style, glyphs, sprites, and required data
-  local and package-resolvable; do not add trackers or runtime CDN dependencies. Missing optional map detail must degrade
-  visibly but must not crash the WebEngine renderer or the application.
+- MapLibre JavaScript/CSS and the host bridge are bundled; the style requests vector tiles and glyphs from
+  `tiles.openfreemap.org`. This is not an offline map. Keep executable code local, preserve attribution, and review
+  the HTML content-security policy and the widget's attribution-link validation when changing network resources or
+  links. Missing tiles/network detail must degrade without crashing the renderer or the application.
 - Linux Essentials-only builds deliberately operate without WebEngine; map consumers must retain their non-WebEngine
   fallback. macOS/Windows packaged paths may include WebEngine and must resolve all local resources from the bundle.
 
 ## Verification
 
-- Verify the real consuming backend/widget, source and packaged path resolution, package-data/Nuitka inclusion, integrity
-  and failure behavior, and license presence. Tests use fixtures or mocked downloads, never live asset refreshes.
+- Verify the real consuming backend/widget, source and packaged path resolution, package-data/Nuitka inclusion,
+  integrity and failure behavior, and license presence. Tests use fixtures or mocked downloads, never live asset
+  refreshes. `tests/test_endpoint_info.py` and `tests/test_public_api.py` cover map/resource consumers; release
+  artifacts require their own inclusion checks. Revalidate provenance/network claims when an asset provider or
+  loader changes.

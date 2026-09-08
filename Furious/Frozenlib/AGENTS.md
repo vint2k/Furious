@@ -9,21 +9,28 @@ for unrelated application orchestration to accumulate in a broad helper namespac
 - `Globals` exposes only deliberate application-lifetime owners. Accessors may be absent during partial startup,
   isolated tests, or teardown; do not add fallback global owners that create competing lifecycles.
 - `AppSettings` keys include preferences and encoded repository blobs. Preserve names, defaults, string/binary
-  encodings, migrations, and import-time registration. When a preference represents a host side effect, persist success
-  only after the host operation succeeds.
+  encodings, migrations, and import-time registration. Distinguish desired preferences from confirmed host effects;
+  startup-registration success is persisted only after its helper reports success.
 - Keep proxy, DNS, routing, TUN, startup registration, session callbacks, external commands, and platform detection here
   or behind a runtime boundary so tests can replace them completely. Windows, macOS, Linux, Flatpak, AppImage, and older
   platform paths are distinct capabilities; never generalize from the current host.
-- A host mutation returns success only after the actual platform operation completed. The owning controller/service
-  decides rollback and persistence; low-level helpers do not silently update shared UI state or convert an unsupported
-  platform into a successful no-op.
+- Check each helper's real result contract. Startup registration and some routing helpers return Booleans; System
+  Proxy set/off currently log failures and return no success value. Script-mode startup registration intentionally
+  does nothing. Do not infer confirmed host state from absence of an exception or generalize one helper's semantics
+  to all. New mutation APIs should report actionable success/failure to the owning controller/service.
 - Prefer argument vectors over shell strings. Each caller owns any responsiveness/cleanup timeout appropriate to its
   context; build-time commands and GUI-time host mutation do not share one universal timeout policy.
+- Windows proxy calls, Linux desktop settings/host bridging, and macOS network-service operations are distinct
+  paths. Application tun2socks host routing differs from backend-native TUN; preserve privilege, DNS restoration,
+  and managed route cleanup for the selected path. Some helpers block synchronously and need caller-level
+  responsiveness review.
 - Own exact native threads/processes/handles and clear stale daemon references. Externally keyed caches are bounded and
   no cache/weak pool captures QObject instances or bound methods accidentally.
 - `CleanupOnExit` and translation/theme/connection pools are registries, not owners. Their legacy de-duplication behavior
   is a compatibility constraint; resource-owning repeated instances need an explicit owner/cleanup stage.
 - `AppResources.py` is generated from `Resources.qrc` and referenced assets. Change the manifest/input files and
   regenerate with the compatible PySide6 resource compiler; never hand-edit generated resource code.
-- Verify every affected OS branch with mocked host calls, plus persistence-on-failure, bounded cleanup, import-time side
-  effects, sensitive logging, stale handles/daemons, and cache growth.
+- Verify every affected OS branch with mocked host calls, plus persistence-on-failure, bounded cleanup, import-time
+  side effects, sensitive logging, stale handles/daemons, and cache growth. Use `tests/test_frozenlib.py` and the
+  mocked platform cases in `tests/test_connection_startup_async.py`; update this guide when observed host contracts
+  change.

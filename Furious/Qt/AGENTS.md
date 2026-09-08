@@ -21,12 +21,16 @@ primitives; pages and services consume them without creating parallel registries
   close/hide/destroy path, and every timer, model, delegate, action, menu, animation, effect, event filter, reply, worker,
   callback, cache, and signal edge that may extend the lifetime.
 - Reusable windows retain one explicit owner and reset on reopen. One-shot dialogs use `AppQTransientDialog` or
-  `AppQMessageBox`; async presentation retains them through native destruction, not merely `finished`.
+  `AppQMessageBox`; `open()` registers their strong async owner through native destruction and releases the token on
+  the next event-loop turn. Plain dialog `show()` does not enter that registry and needs another durable owner.
+  `finished` ends interaction, not native lifetime; operation context may be released then only if later callbacks
+  do not need it.
 - `AppQDialog`/`AppQMainWindow` registries bridge asynchronous presentation/visibility; they are not substitute
   application owners. Registry cleanup captures opaque tokens, never the object being released.
-- A Qt parent alone does not prove the Python wrapper or logical feature lifetime. Conversely, `.show()` does not retain
-  an unparented top-level wrapper. Do not solve ambiguity by global retention, indiscriminate delete-on-close, routine
-  `gc.collect()`, or broad deleted-wrapper suppression.
+- A Qt parent alone does not prove the Python wrapper or logical feature lifetime. Bare Qt `.show()` does not retain
+  an unparented wrapper; `AppQMainWindow.show()` adds its own visible-window retention until accepted close. Do not
+  solve ambiguity by global retention, indiscriminate delete-on-close, routine `gc.collect()`, or broad
+  deleted-wrapper suppression.
 
 ## Signals, threads, and async Qt work
 
@@ -36,8 +40,11 @@ primitives; pages and services consume them without creating parallel registries
   through a compiled bound method or a closure/partial that strongly captures it. Use `connectWeakly()` with a static
   method name and `sender=` when the sender is independent/longer-lived; use `forwardSender=True` instead of relying on
   `QObject.sender()` and `singleShotWeakly()` for deferred named-method delivery.
-- Direct bound-method connections are acceptable only for deliberately long-lived receivers when retention is
-  intentional. `AppQAction.callback` is strong by design, so the action owner cannot outlive the captured receiver.
+- Direct connections are appropriate for deliberately shared persistent lifetimes; syntax alone does not prove a
+  leak. Recheck the selected Nuitka/PySide6 callback protection when the toolchain changes. Static weak method names
+  are runtime contracts, so renames must update registrations and tests. Weak dispatch itself does not marshal
+  arbitrary worker calls to the GUI thread; choose an explicit queued owner-thread delivery boundary.
+- `AppQAction.callback` is strong by design, so the action owner cannot outlive the captured receiver.
 - Every `QNetworkReply` has one manager/context owner, one freshness rule, and one terminal deletion path. Do not attach
   ad-hoc attributes to third-party Qt objects or multiply timers/connections across show/hide cycles.
 - Queued delivery never transfers ownership implicitly. The sender may finish before delivery, so callbacks resolve a
@@ -52,5 +59,8 @@ primitives; pages and services consume them without creating parallel registries
   or destruction, construct real widgets and use `QTest` plus the real event loop. Test semantic state and lifecycle,
   not private coordinates or pixel-perfect screenshots.
 - For lifetime-sensitive changes, repeat open/close/accept/reject paths and assert destroyed signals, weak wrappers,
-  registries, timers, callbacks, replies, threads, handles, and child counts return to baseline. Run a representative
-  Nuitka probe when compiled callback retention or packaged-only behavior is part of the defect.
+  registries, timers, callbacks, replies, threads, handles, and child counts return to baseline. Run a
+  representative Nuitka probe when compiled callback retention or packaged-only behavior is part of the defect.
+  Start with `tests/test_qt_lifetime.py`, `tests/test_dialog_geometry.py`, and `tests/test_main_window_geometry.py`;
+  use the `tests/fixtures/editor_lifetime_probe.py` fixture for compiled investigation. Treat unrun packaged probes
+  as unverified, and update these rules when measured ownership or the toolchain changes.

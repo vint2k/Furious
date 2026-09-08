@@ -1,6 +1,7 @@
 # Plugin guidance
 
-Inherit the root, package, and interface guides. This scope owns capability definitions, atomic registration, dispatch,
+Inherit the root and package guides; consult Interface guidance for runtime/storage contracts. This scope owns
+capability definitions, atomic registration, dispatch,
 and plugin lifecycle; concrete backend policy remains in each implementation.
 
 ## Contracts and registry
@@ -10,30 +11,39 @@ and plugin lifecycle; concrete backend policy remains in each implementation.
   adding backend-name branches or a parallel registry.
 - The registry normalizes and validates a plugin's complete contribution before committing indexes. Duplicate IDs or
   schemes, incompatible API versions, invalid descriptors, and initialization failure leave existing providers intact.
-- Host plugin types register before external entry-point discovery. Discovery and bundled registrations remain
-  deterministic, side-effect-light, and literal enough for source, wheel, and Nuitka inclusion.
+- Host plugin types register before external entry-point discovery. Bundled registrations are explicit for source,
+  wheel, and Nuitka inclusion. External entries currently follow metadata enumeration order; do not promise sorted
+  discovery or rely on it for precedence. Registration is atomic per plugin, not across a multi-plugin entry point.
 - Optional provider failure is isolated when another candidate can continue; required-operation failure remains
   observable with plugin/capability identity and without secret configuration data.
 
 ## Ownership and compatibility
 
-- Registries own process-lifetime plugin instances, capabilities, factories, descriptors, and immutable metadata. They
-  never own created editors/dialogs, active runtimes, replies, repository collections, or controller state. Factories
-  return a fresh owned result per request.
+- Registries own plugin/capability instances and descriptors; created editors and runtimes transfer to their
+  callers. Capabilities may retain explicitly owned reusable services with shutdown obligations. Do not cache
+  created transient UI in the registry or treat the registry as the connection/repository authority.
 - Once a runtime factory returns a valid launch, the caller acquires that exact runtime even if start raises, so partial
   resources can be stopped/disposed. Return no runtime only when none was acquired.
 - Plugin/model data is untrusted at the boundary even though installed code is trusted to execute. Validate types,
   ownership, required fields, and QObject validity before publishing results.
-- API and model layers never import concrete plugins. Bundled backends and extensions obey the same public lifecycle as
-  entry-point plugins; do not give bundled code hidden repository/UI side channels.
+- API and model layers never import concrete plugins. Bundled backends/extensions obey the public lifecycle; their
+  existing host-global integrations must not become prerequisites for external plugins.
 - Evolve contracts additively when practical. Before a breaking change, inspect external discovery, compatibility
   exports, every bundled implementation, tests, and compiled inclusion; do not infer compatibility from built-ins alone.
 - A capability contract is generic only when an external plugin can satisfy it without importing private application
   state. Backend-specific defaults, settings keys, document branches, and host assumptions stay behind the provider
   rather than becoming undeclared registry requirements.
 - API-version-3 runtime factories return `PreparedRuntime` directly. The runtime is fully prepared before return,
-  starts with zero arguments, raises typed startup failures, and exposes readiness separately; do not add legacy launch
-  adapters, Boolean startup side channels, or alternate factory-result shapes.
+  starts with zero arguments, raises typed startup failures, and exposes readiness separately; do not add legacy
+  launch adapters, Boolean startup side channels, or alternate factory-result shapes. The registry's existing
+  synchronous `startCoreRuntime()` wrapper separately returns runtime/success for compatibility; preserve ownership
+  on start failure.
+- `TUNPreparationError` is the explicit terminal native-TUN failure contract. Other provider exceptions currently
+  log and return an unhandled result; required TUN rejection must use the typed error rather than assume all
+  exceptions stop fallback. Optional capabilities may be absent; an External Core need not implement statistics or
+  download probes.
+- Frozen result envelopes are not recursively immutable: embedded configuration/metadata mappings still require copy
+  isolation before mutation or worker handoff.
 - Capability instances default to GUI-thread-only for background subscription preparation. A decoder or protocol
   handler opts into worker execution only after its parsing, validation, caches, globals, and Qt usage are audited as
   safe for concurrent copied inputs; keep unclassified third-party capability execution on the GUI thread.
@@ -41,5 +51,7 @@ and plugin lifecycle; concrete backend policy remains in each implementation.
 ## Verification
 
 - Cover discovery/order, API version and duplicate rejection, each changed dispatch path, registration rollback,
-  reverse idempotent shutdown, provider failure isolation, invalid factory results, repeated transient creations without
-  registry retention, and packaged discovery/import.
+  reverse idempotent shutdown, provider failure isolation, invalid factory results, repeated transient creations
+  without registry retention, and packaged discovery/import. `tests/test_plugin_architecture.py` and
+  `tests/test_public_api.py` anchor compatibility; challenge this guide when API versions or capability ownership
+  change.
