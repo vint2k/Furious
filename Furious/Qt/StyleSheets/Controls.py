@@ -20,6 +20,17 @@
 from textwrap import dedent
 
 
+def comboBoxPopupStyleSheet():
+    """Leave the popup container transparent behind its styled item view."""
+    # Qt excludes this container from application QSS unless it has local QSS.
+    return dedent("""
+        QFrame#AppComboBoxPopup {
+            border: none;
+            background-color: transparent;
+        }
+    """)
+
+
 def controlStyleSheet(
     palette,
     caretDownIcon,

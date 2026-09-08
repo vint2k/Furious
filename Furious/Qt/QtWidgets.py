@@ -26,6 +26,7 @@ from Furious.Qt.DynamicTheme import *
 from Furious.Qt.DynamicTranslate import gettext as _
 from Furious.Qt.QtGui import *
 from Furious.Qt.Signals import connectWeakly, singleShotWeakly
+from Furious.Qt.StyleSheets.Controls import comboBoxPopupStyleSheet
 
 from PySide6 import QtCore
 from PySide6.QtGui import *
@@ -305,6 +306,24 @@ class AppQComboBox(Mixins.QTranslatable, QComboBox):
         super().__init__(*args, **kwargs)
 
         self._themedSeparatorDelegate = None
+
+    def showPopup(self):
+        """Prepare the native popup before its first window is created."""
+        popup = self.view().window()
+
+        if popup.objectName() != 'AppComboBoxPopup':
+            popup.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint)
+            popup.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground)
+            popup.setObjectName('AppComboBoxPopup')
+            popup.setStyleSheet(comboBoxPopupStyleSheet())
+
+        popup.ensurePolished()
+
+        # Windows 11 style adds a shadow that is clipped by the popup bounds.
+        if isinstance(popup.graphicsEffect(), QGraphicsDropShadowEffect):
+            popup.setGraphicsEffect(None)
+
+        super().showPopup()
 
     def setContentWidthAdjustable(self, adjustable: bool = True):
         """Opt into content-aware width hints without imposing a fixed width."""
@@ -908,6 +927,10 @@ class AppQMenu(Mixins.QTranslatable, QMenu):
 
         super().__init__(**kwargs)
 
+        # Rounded QSS borders need transparent pixels outside their outline.
+        self.setWindowFlag(QtCore.Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground)
+
         # In some old version PySide6, the self.actions() method
         # does not return with seperators. _actions list append
         # them all
@@ -926,6 +949,13 @@ class AppQMenu(Mixins.QTranslatable, QMenu):
 
         if menuRole:
             self.setMenuRole(menuRole)
+
+    def showEvent(self, event):
+        """Remove the native style's clipped shadow after menu polishing."""
+        super().showEvent(event)
+
+        if isinstance(self.graphicsEffect(), QGraphicsDropShadowEffect):
+            self.setGraphicsEffect(None)
 
     def setMenuRole(self, role: str, recursive=False):
         """Apply a reusable visual role to this menu and its submenus."""

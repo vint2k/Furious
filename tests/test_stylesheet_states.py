@@ -19,16 +19,23 @@
 
 from __future__ import annotations
 
-from Furious.Qt import AppQLineEdit, AppStyleSheet
+from Furious.Qt import AppQComboBox, AppQLineEdit, AppQMenu, AppStyleSheet
 from Furious.Widget.NavigationView import NavigationView
 
 from PySide6 import QtCore
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QPushButton, QStyleOptionButton, QToolButton, QWidget
+from PySide6.QtWidgets import (
+    QGraphicsDropShadowEffect,
+    QPushButton,
+    QStyleOptionButton,
+    QToolButton,
+    QWidget,
+)
 
 from tests.support import application, collectAtBoundary, processQtEvents, waitFor
 
+import shiboken6
 import unittest
 
 
@@ -83,6 +90,117 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
         button.deleteLater()
 
         return color
+
+    def assertRoundedPopup(self, popup):
+        """Require clear outer corners and an opaque painted surface."""
+        image = popup.grab().toImage()
+        self.assertTrue(image.hasAlphaChannel())
+
+        for x in (0, image.width() - 1):
+            for y in (0, image.height() - 1):
+                self.assertEqual(image.pixelColor(x, y).alpha(), 0)
+
+        self.assertEqual(
+            image.pixelColor(image.width() // 2, image.height() // 2).alpha(), 255
+        )
+        self.assertTrue(popup.windowFlags() & QtCore.Qt.WindowType.FramelessWindowHint)
+
+    def testMenuCornersStayTransparentAcrossThemesAndReopens(self):
+        """Keep menu and submenu surfaces rounded without changing activation."""
+        app = application()
+        originalStyleSheet = app.styleSheet()
+        menu = AppQMenu()
+        action = menu.addAction('Example')
+        action.setCheckable(True)
+        submenu = AppQMenu(parent=menu)
+        submenu.setTitle('More')
+        submenu.addAction('Another example')
+        menu.addMenu(submenu)
+
+        try:
+            for theme in (AppStyleSheet.Light, AppStyleSheet.Dark) * 3:
+                app.setStyleSheet(AppStyleSheet.forTheme(theme))
+
+                for direction in (QtCore.Qt.LeftToRight, QtCore.Qt.RightToLeft):
+                    with self.subTest(theme=theme, direction=direction):
+                        # Reproduce the shadow installed by the Windows 11 style
+                        # even when the headless test application uses Fusion.
+                        shadow = QGraphicsDropShadowEffect(menu)
+                        shadow.setBlurRadius(3)
+                        shadow.setOffset(3, 3)
+                        menu.setGraphicsEffect(shadow)
+                        menu.setLayoutDirection(direction)
+                        menu.popup(QtCore.QPoint(20, 20))
+                        processQtEvents()
+                        self.assertRoundedPopup(menu)
+                        self.assertFalse(shiboken6.isValid(shadow))
+                        menu.setActiveAction(submenu.menuAction())
+                        openKey = (
+                            QtCore.Qt.Key_Right
+                            if direction == QtCore.Qt.LeftToRight
+                            else QtCore.Qt.Key_Left
+                        )
+                        QTest.keyClick(menu, openKey)
+                        waitFor(submenu.isVisible)
+                        self.assertRoundedPopup(submenu)
+                        QTest.keyClick(submenu, QtCore.Qt.Key_Escape)
+                        self.assertFalse(submenu.isVisible())
+                        menu.setActiveAction(action)
+                        wasChecked = action.isChecked()
+                        QTest.keyClick(menu, QtCore.Qt.Key_Return)
+                        self.assertEqual(action.isChecked(), not wasChecked)
+                        self.assertFalse(menu.isVisible())
+        finally:
+            menu.close()
+            menu.deleteLater()
+            processQtEvents()
+            app.setStyleSheet(originalStyleSheet)
+
+    def testComboPopupCornersStayTransparentAcrossThemesAndReopens(self):
+        """Paint one rounded view and retain native keyboard selection and reuse."""
+        app = application()
+        originalStyleSheet = app.styleSheet()
+        combo = AppQComboBox()
+        combo.addItems(['First', 'Second', 'Third'])
+        combo.resize(260, 36)
+        combo.show()
+        popup = combo.view().window()
+        # Some native styles already enable translucency while polishing.
+        popup.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground)
+
+        try:
+            for theme in (AppStyleSheet.Light, AppStyleSheet.Dark) * 3:
+                app.setStyleSheet(AppStyleSheet.forTheme(theme))
+
+                for direction in (QtCore.Qt.LeftToRight, QtCore.Qt.RightToLeft):
+                    with self.subTest(theme=theme, direction=direction):
+                        shadow = QGraphicsDropShadowEffect(popup)
+                        shadow.setBlurRadius(3)
+                        shadow.setOffset(3, 3)
+                        popup.setGraphicsEffect(shadow)
+                        combo.setLayoutDirection(direction)
+                        combo.setCurrentIndex(0)
+                        combo.showPopup()
+                        processQtEvents()
+                        self.assertIs(combo.view().window(), popup)
+                        self.assertRoundedPopup(popup)
+                        self.assertFalse(shiboken6.isValid(shadow))
+                        QTest.keyClick(combo.view(), QtCore.Qt.Key_Down)
+                        QTest.keyClick(combo.view(), QtCore.Qt.Key_Return)
+                        self.assertEqual(combo.currentIndex(), 1)
+                        self.assertFalse(popup.isVisible())
+                        combo.showPopup()
+                        processQtEvents()
+                        self.assertRoundedPopup(popup)
+                        QTest.keyClick(combo.view(), QtCore.Qt.Key_Escape)
+                        self.assertFalse(popup.isVisible())
+                        self.assertEqual(combo.currentIndex(), 1)
+        finally:
+            combo.hidePopup()
+            combo.close()
+            combo.deleteLater()
+            processQtEvents()
+            app.setStyleSheet(originalStyleSheet)
 
     def testClearButtonKeepsNativeBehaviorAndGeometryAcrossThemes(self):
         """Keep embedded buttons centered, theme-correct and bounded after restyling."""
