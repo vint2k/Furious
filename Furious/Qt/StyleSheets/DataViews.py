@@ -28,13 +28,22 @@ def dataViewStyleSheet(palette, progressBarStyleSheet, checkIcon):
             QTreeView,
             QListView {{
                 border: 1px solid {palette['border']};
-                border-radius: 8px;
+                border-radius: 6px;
+                /* Keep rectangular viewports and headers inside the rounded frame. */
+                padding: 2px;
+                background-clip: content;
                 background-color: {palette['panel']};
                 alternate-background-color: {palette['panel_alt']};
                 gridline-color: {palette['border']};
                 color: {palette['text']};
                 selection-background-color: {palette['selection']};
                 selection-color: {palette['selection_text']};
+            }}
+
+            QTableView,
+            QTableWidget {{
+                padding: 0;
+                background-clip: border;
             }}
 
             QTableView::item,

@@ -55,7 +55,7 @@ strategy in an individual test.
 | Bounded service work, update validation, plugin UI, and worker lifetime | `test_service_runtime.py` |
 | Frozenlib state helpers and mocked platform-operation boundaries | `test_frozenlib.py` |
 | Settings sandbox, navigation overlay behavior, public exports, and scale/theme isolation | `test_isolation_and_navigation.py`, `test_public_api.py`, `test_layout_matrix.py` |
-| Shared Fluent visual states, rounded menu/combo popup transparency and interaction, and native line-edit clear-button alignment and theme changes | `test_stylesheet_states.py` |
+| Shared Fluent visual states, zero table padding and intact rounded list corners, rounded menu/combo popup transparency and interaction, and native line-edit clear-button alignment and theme changes | `test_stylesheet_states.py` |
 | Theme cross-fade activation, interruption, multi-window cleanup, and animation policy | `test_theme_transition.py` |
 | AppQMainWindow lifecycle, subclass policies, geometry restoration, and migration | `test_main_window_geometry.py` |
 | AppQDialog first-presentation geometry, native show paths, centering, and async lifetime | `test_dialog_geometry.py` |

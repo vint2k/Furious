@@ -473,6 +473,7 @@ def controlStyleSheet(
 
             QComboBox QAbstractItemView {{
                 padding: 4px;
+                background-clip: border;
                 border: 1px solid {palette['border_strong']};
                 border-radius: 6px;
                 background-color: {palette['overlay']};

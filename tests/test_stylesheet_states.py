@@ -19,11 +19,24 @@
 
 from __future__ import annotations
 
-from Furious.Qt import AppQComboBox, AppQLineEdit, AppQMenu, AppStyleSheet
+from Furious.Qt import (
+    AppQComboBox,
+    AppQLineEdit,
+    AppQListView,
+    AppQMenu,
+    AppQTableView,
+    AppStyleSheet,
+)
 from Furious.Widget.NavigationView import NavigationView
 
 from PySide6 import QtCore
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import (
+    QColor,
+    QImage,
+    QPalette,
+    QStandardItem,
+    QStandardItemModel,
+)
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
@@ -90,6 +103,114 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
         button.deleteLater()
 
         return color
+
+    def assertItemViewInsetsAndListCorners(self, view, theme):
+        """Check zero table padding and intact padded list corners."""
+        if isinstance(view, AppQTableView):
+            self.assertEqual(view.contentsRect(), view.rect().adjusted(1, 1, -1, -1))
+            return
+
+        actual = view.grab().toImage()
+        frame = QImage(actual.size(), QImage.Format.Format_ARGB32_Premultiplied)
+        frame.setDevicePixelRatio(actual.devicePixelRatio())
+        frame.fill(QtCore.Qt.transparent)
+        view.render(frame, renderFlags=QWidget.RenderFlag.DrawWindowBackground)
+        panel = QColor(AppStyleSheet.Palettes[theme]['panel'])
+        paddingPoint = QtCore.QPoint(view.width() // 2, 2)
+        host = view.parentWidget()
+        hostImage = host.grab().toImage()
+        hostPoint = view.mapTo(host, paddingPoint)
+        self.assertEqual(
+            hostImage.pixelColor(
+                round(hostPoint.x() * hostImage.devicePixelRatio()),
+                round(hostPoint.y() * hostImage.devicePixelRatio()),
+            ),
+            QColor(AppStyleSheet.Palettes[theme]['window']),
+        )
+        cornerSize = round(8 * actual.devicePixelRatio())
+
+        for left in (0, actual.width() - cornerSize):
+            for top in (0, actual.height() - cornerSize):
+                checked = 0
+
+                for x in range(left, left + cornerSize):
+                    for y in range(top, top + cornerSize):
+                        expected = frame.pixelColor(x, y)
+
+                        if expected.alpha() and expected != panel:
+                            self.assertEqual(
+                                actual.pixelColor(x, y),
+                                expected,
+                                f"frame pixel {(x, y)}",
+                            )
+                            checked += 1
+
+                self.assertGreater(checked, 0)
+
+    def testItemViewInsetsAndListCornersAcrossThemes(self):
+        """Keep table insets and list corners stable while resizing and scrolling."""
+        app = application()
+        originalStyleSheet = app.styleSheet()
+
+        try:
+            for viewType in (AppQTableView, AppQListView):
+                host = QWidget()
+                view = viewType(host)
+                view.move(10, 10)
+                model = QStandardItemModel(view)
+
+                for row in range(20):
+                    model.appendRow([QStandardItem(f'Item {row}') for _ in range(5)])
+
+                view.setModel(model)
+                view.setAlternatingRowColors(True)
+
+                try:
+                    for theme in (AppStyleSheet.Light, AppStyleSheet.Dark):
+                        app.setStyleSheet(AppStyleSheet.forTheme(theme))
+
+                        for direction in (QtCore.Qt.LeftToRight, QtCore.Qt.RightToLeft):
+                            view.setLayoutDirection(direction)
+
+                            for size in (
+                                QtCore.QSize(360, 180),
+                                QtCore.QSize(620, 340),
+                            ):
+                                with self.subTest(
+                                    view=viewType,
+                                    theme=theme,
+                                    direction=direction,
+                                    size=size,
+                                ):
+                                    view.resize(size)
+                                    host.resize(size + QtCore.QSize(20, 20))
+                                    host.show()
+                                    view.setCurrentIndex(model.index(0, 0))
+                                    view.scrollToTop()
+                                    processQtEvents()
+                                    self.assertItemViewInsetsAndListCorners(view, theme)
+                                    view.setCurrentIndex(model.index(19, 4))
+                                    view.scrollToBottom()
+                                    view.horizontalScrollBar().setValue(
+                                        view.horizontalScrollBar().maximum()
+                                    )
+                                    processQtEvents()
+                                    self.assertItemViewInsetsAndListCorners(view, theme)
+
+                    model.clear()
+                    processQtEvents()
+                    self.assertItemViewInsetsAndListCorners(view, AppStyleSheet.Dark)
+                    viewportImage = view.viewport().grab().toImage()
+                    self.assertEqual(
+                        viewportImage.pixelColor(viewportImage.rect().center()),
+                        QColor(AppStyleSheet.Palettes[AppStyleSheet.Dark]['panel']),
+                    )
+                finally:
+                    host.close()
+                    host.deleteLater()
+                    processQtEvents()
+        finally:
+            app.setStyleSheet(originalStyleSheet)
 
     def assertRoundedPopup(self, popup):
         """Require clear outer corners and an opaque painted surface."""
@@ -184,6 +305,15 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                         processQtEvents()
                         self.assertIs(combo.view().window(), popup)
                         self.assertRoundedPopup(popup)
+                        # Dropdown padding must remain opaque over the page below.
+                        popupImage = combo.view().grab().toImage()
+                        self.assertEqual(
+                            popupImage.pixelColor(
+                                popupImage.width() // 2,
+                                round(2 * popupImage.devicePixelRatio()),
+                            ).alpha(),
+                            255,
+                        )
                         self.assertFalse(shiboken6.isValid(shadow))
                         QTest.keyClick(combo.view(), QtCore.Qt.Key_Down)
                         QTest.keyClick(combo.view(), QtCore.Qt.Key_Return)
