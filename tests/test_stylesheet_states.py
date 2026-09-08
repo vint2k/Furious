@@ -157,6 +157,7 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                 host = QWidget()
                 view = viewType(host)
                 view.move(10, 10)
+
                 model = QStandardItemModel(view)
 
                 for row in range(20):
@@ -188,18 +189,23 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                                     view.setCurrentIndex(model.index(0, 0))
                                     view.scrollToTop()
                                     processQtEvents()
+
                                     self.assertItemViewInsetsAndListCorners(view, theme)
+
                                     view.setCurrentIndex(model.index(19, 4))
                                     view.scrollToBottom()
                                     view.horizontalScrollBar().setValue(
                                         view.horizontalScrollBar().maximum()
                                     )
                                     processQtEvents()
+
                                     self.assertItemViewInsetsAndListCorners(view, theme)
 
                     model.clear()
                     processQtEvents()
+
                     self.assertItemViewInsetsAndListCorners(view, AppStyleSheet.Dark)
+
                     viewportImage = view.viewport().grab().toImage()
                     self.assertEqual(
                         viewportImage.pixelColor(viewportImage.rect().center()),
@@ -230,9 +236,11 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
         """Keep menu and submenu surfaces rounded without changing activation."""
         app = application()
         originalStyleSheet = app.styleSheet()
+
         menu = AppQMenu()
         action = menu.addAction('Example')
         action.setCheckable(True)
+
         submenu = AppQMenu(parent=menu)
         submenu.setTitle('More')
         submenu.addAction('Another example')
@@ -253,8 +261,10 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                         menu.setLayoutDirection(direction)
                         menu.popup(QtCore.QPoint(20, 20))
                         processQtEvents()
+
                         self.assertRoundedPopup(menu)
                         self.assertFalse(shiboken6.isValid(shadow))
+
                         menu.setActiveAction(submenu.menuAction())
                         openKey = (
                             QtCore.Qt.Key_Right
@@ -264,11 +274,14 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                         QTest.keyClick(menu, openKey)
                         waitFor(submenu.isVisible)
                         self.assertRoundedPopup(submenu)
+
                         QTest.keyClick(submenu, QtCore.Qt.Key_Escape)
                         self.assertFalse(submenu.isVisible())
+
                         menu.setActiveAction(action)
                         wasChecked = action.isChecked()
                         QTest.keyClick(menu, QtCore.Qt.Key_Return)
+
                         self.assertEqual(action.isChecked(), not wasChecked)
                         self.assertFalse(menu.isVisible())
         finally:
@@ -281,10 +294,12 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
         """Paint one rounded view and retain native keyboard selection and reuse."""
         app = application()
         originalStyleSheet = app.styleSheet()
+
         combo = AppQComboBox()
         combo.addItems(['First', 'Second', 'Third'])
         combo.resize(260, 36)
         combo.show()
+
         popup = combo.view().window()
         # Some native styles already enable translucency while polishing.
         popup.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -299,12 +314,15 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                         shadow.setBlurRadius(3)
                         shadow.setOffset(3, 3)
                         popup.setGraphicsEffect(shadow)
+
                         combo.setLayoutDirection(direction)
                         combo.setCurrentIndex(0)
                         combo.showPopup()
                         processQtEvents()
+
                         self.assertIs(combo.view().window(), popup)
                         self.assertRoundedPopup(popup)
+
                         # Dropdown padding must remain opaque over the page below.
                         popupImage = combo.view().grab().toImage()
                         self.assertEqual(
@@ -315,14 +333,20 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                             255,
                         )
                         self.assertFalse(shiboken6.isValid(shadow))
+
                         QTest.keyClick(combo.view(), QtCore.Qt.Key_Down)
                         QTest.keyClick(combo.view(), QtCore.Qt.Key_Return)
+
                         self.assertEqual(combo.currentIndex(), 1)
                         self.assertFalse(popup.isVisible())
+
                         combo.showPopup()
                         processQtEvents()
+
                         self.assertRoundedPopup(popup)
+
                         QTest.keyClick(combo.view(), QtCore.Qt.Key_Escape)
+
                         self.assertFalse(popup.isVisible())
                         self.assertEqual(combo.currentIndex(), 1)
         finally:

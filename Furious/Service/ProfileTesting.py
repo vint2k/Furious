@@ -1305,6 +1305,7 @@ class ProfileTestManager(QtCore.QObject):
             tcpingConcurrency=tcpingConcurrency,
             parent=self,
         )
+
         self._serialDownloadScheduler = _DownloadSpeedScheduler(
             self.resolveTarget,
             self.applyResult,
@@ -1319,6 +1320,7 @@ class ProfileTestManager(QtCore.QObject):
             portRange=self.ConcurrentDownloadPorts,
             parent=self,
         )
+
         self._shuttingDown = False
 
     def resolveTarget(self, target: ProfileTestTarget):

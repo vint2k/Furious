@@ -1729,6 +1729,7 @@ class AppQMessageBox(AppQTransientDialog):
             + buttonMargins.right()
             + self.surface.frameWidth() * 2
         )
+
         parentWidthLimit = max(240, available.width() - 24)
         relativeWidthLimit = max(
             240,
@@ -1738,6 +1739,7 @@ class AppQMessageBox(AppQTransientDialog):
                 parentWidthLimit,
             ),
         )
+
         # Text wraps at the normal parent-relative limit.  Buttons cannot wrap,
         # so a narrow owner may lend the dialog more width (up to its usable
         # area) when translated action labels require it.
@@ -1746,6 +1748,7 @@ class AppQMessageBox(AppQTransientDialog):
             parentWidthLimit,
             max(relativeWidthLimit, preferredButtonsWidth),
         )
+
         buttonCount = len(self.buttons())
 
         if buttonCount <= 1:
@@ -1818,6 +1821,7 @@ class AppQMessageBox(AppQTransientDialog):
             preferredButtonsWidth,
         )
         surfaceWidth = min(maximumSurfaceWidth, surfaceWidth)
+
         contentMargins = self.contentLayout.contentsMargins()
         contentHeight = (
             max(40 if hasIcon else 0, viewportHeight + 2)

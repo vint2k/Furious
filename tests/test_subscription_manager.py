@@ -267,6 +267,7 @@ class SubscriptionManagerTest(TestCase):
                 },
                 result,
             )
+
             SubscriptionManager._recordGroupFailure(
                 {'unique': 'group-a', 'error': 'offline'}
             )
@@ -276,6 +277,7 @@ class SubscriptionManagerTest(TestCase):
                 group.subscriptionTotal,
                 group.subscriptionExpire,
             )
+
             SubscriptionManager._recordGroupSuccess(
                 {'unique': 'group-a', 'subscriptionInfo': None},
                 result,

@@ -280,6 +280,7 @@ class ConnectionController(QtCore.QObject):
         self._startConnecting()
 
         logManager = AppLogManager()
+
         # Retain application diagnostics while starting a fresh runtime log.
         logManager.clear(runtimeOnly=True)
 

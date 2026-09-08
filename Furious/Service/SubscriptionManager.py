@@ -616,6 +616,7 @@ class SubscriptionManager(HttpGetManager):
 
         self._preparationJobs.pop(jobId, None)
         fallbackPayload = self._preparationPayloads.pop(jobId, None)
+
         context = getattr(outcome, 'context', {})
 
         if self._shuttingDown:
@@ -1036,6 +1037,7 @@ class SubscriptionManager(HttpGetManager):
             subscriptionInfo = _parseSubscriptionUserInfo(
                 networkReply.rawHeader(SUBSCRIPTION_USERINFO_HEADER)
             )
+
             context = {
                 **kwargs,
                 'decoderId': decoderId,
@@ -1068,6 +1070,7 @@ class SubscriptionManager(HttpGetManager):
         )
 
         result = self.importer.importPayload(data, source)
+
         profileFilter = str(kwargs.get('filter', '')).strip()
 
         if result is not None and profileFilter:

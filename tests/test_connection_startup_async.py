@@ -513,6 +513,7 @@ class ConnectionStartupAsyncTest(TestCase):
         manager = ConnectionManager()
         manager._prepareTUNPolicy = mock.Mock(return_value=(False, True))
         self.managers.append(manager)
+
         registry = _Registry(
             [
                 PreparedRuntime(
@@ -635,6 +636,7 @@ class ConnectionStartupAsyncTest(TestCase):
         manager = ConnectionManager()
         manager._prepareTUNPolicy = mock.Mock(return_value=(False, True))
         self.managers.append(manager)
+
         registry = _Registry(
             [
                 PreparedRuntime(
@@ -711,6 +713,7 @@ class ConnectionStartupAsyncTest(TestCase):
                 'Global',
                 deepcopy=False,
             )
+
             succeeded = []
             operation.succeeded.connect(succeeded.append)
 
@@ -753,6 +756,7 @@ class ConnectionStartupAsyncTest(TestCase):
         manager = ConnectionManager()
         manager._prepareTUNPolicy = mock.Mock(return_value=(False, True))
         self.managers.append(manager)
+
         registry = _Registry(
             [
                 PreparedRuntime(
@@ -821,6 +825,7 @@ class ConnectionStartupAsyncTest(TestCase):
                 'Global',
                 deepcopy=False,
             )
+
             succeeded = []
             operation.succeeded.connect(succeeded.append)
 

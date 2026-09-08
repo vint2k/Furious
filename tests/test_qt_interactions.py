@@ -1573,6 +1573,7 @@ class ProfileMutationBatchTest(unittest.TestCase):
                 self.profile(f'profile-{index:04}') for index in range(count)
             )
             AppSettings.set('ActivatedItemIndex', str(count - 1))
+
             table = ServerTableView(
                 configurationEditorFactory=QWidget,
                 qrCodeWindowFactory=QWidget,
@@ -1626,16 +1627,21 @@ class ProfileMutationBatchTest(unittest.TestCase):
                 dialog, 'updateStatus', wraps=dialog.updateStatus
             ) as status:
                 dialog.importNext()
+
                 self.assertEqual(dialog.currentIndex, 128)
                 self.assertEqual(len(Storage.UserServers()), 128)
                 status.assert_not_called()
+
                 clock.monotonic.return_value = 10.101
                 dialog.importNext()
+
                 self.assertEqual(dialog.currentIndex, 256)
                 self.assertEqual(status.call_count, 1)
                 self.assertIn('256/600', dialog.statusLabel.text())
+
                 for _index in range(4):
                     dialog.importNext()
+
                 self.assertEqual(status.call_count, 2)
 
             self.assertEqual(Storage.UserServers(), expected)
@@ -1643,11 +1649,13 @@ class ProfileMutationBatchTest(unittest.TestCase):
             self.assertEqual(
                 [item.index for item in expected], list(range(len(expected)))
             )
+
             self.assertEqual(inserted.count(), 5)
             self.assertEqual(
                 [(inserted.at(i)[1], inserted.at(i)[2]) for i in range(5)],
                 [(0, 127), (128, 254), (255, 382), (383, 509), (510, 597)],
             )
+
             self.assertEqual(reconcile.call_count, 5)
             refresh.assert_not_called()
             self.assertEqual(schedule.call_count, 4)
@@ -1677,12 +1685,16 @@ class ProfileMutationBatchTest(unittest.TestCase):
                 dialog = ImportURIsProgressDialog(
                     ('first', 'second', 'third'), parent=table
                 )
+
                 dialog.importNext()
+
                 self.assertEqual(dialog.currentIndex, 1)
                 self.assertEqual(Storage.UserServers(), [profile])
+
                 dialog.cancel()
                 dialog.importNext()
                 dialog.importNext()
+
                 self.assertTrue(dialog.finishedImport)
                 parser.assert_called_once()
                 success.assert_not_called()
@@ -1700,8 +1712,10 @@ class ProfileMutationBatchTest(unittest.TestCase):
             dialog = ImportURIsProgressDialog(
                 ('invalid', 'invalid'), failure, parent=table
             )
+
             dialog.importNext()
             dialog.importNext()
+
             failure.assert_called_once_with()
             window.assert_not_called()
             self.assertEqual(Storage.UserServers(), [])
@@ -1726,6 +1740,7 @@ class ProfileMutationBatchTest(unittest.TestCase):
                 dialog, 'updateStatus', wraps=dialog.updateStatus
             ) as status:
                 dialog.deleteNext()
+
                 self.assertIs(
                     Storage.UserServers()[Storage.UserActivatedItemIndex()],
                     profiles[-1],
@@ -1733,18 +1748,24 @@ class ProfileMutationBatchTest(unittest.TestCase):
                 self.assertEqual(dialog.deletedCount, 128)
                 controller.startDisconnection.assert_not_called()
                 status.assert_not_called()
+
                 clock.monotonic.return_value = 10.101
                 dialog.deleteNext()
+
                 self.assertIn('256/1000', dialog.statusLabel.text())
+
                 for _index in range(7):
                     dialog.deleteNext()
+
                 self.assertEqual(status.call_count, 2)
 
             self.assertEqual(Storage.UserServers(), [])
             self.assertTrue(all(profile.deleted for profile in profiles))
+
             self.assertEqual(removed.count(), 8)
             self.assertEqual(reconcile.call_count, 8)
             self.assertEqual(schedule.call_count, 7)
+
             self.assertEqual(Storage.UserActivatedItemIndex(), -1)
             self.assertEqual(activated.count(), 1)
             controller.startDisconnection.assert_called_once()
@@ -1757,12 +1778,16 @@ class ProfileMutationBatchTest(unittest.TestCase):
             profiles = list(Storage.UserServers())
             dialog = DeleteServersProgressDialog(table, range(5), parent=table)
             dialog.BatchSize = 2
+
             dialog.deleteNext()
+
             self.assertEqual(Storage.UserServers(), profiles[2:])
+
             table.sourceModel.sort(0, QtCore.Qt.DescendingOrder)
             table.deleteItemByIndex([3], showProgress=False)
             newcomer = self.profile('new')
             table.appendNewItemByFactory(newcomer)
+
             dialog.deleteNext()
             dialog.cancel()
             dialog.deleteNext()
@@ -1784,9 +1809,11 @@ class ProfileMutationBatchTest(unittest.TestCase):
             profiles = list(Storage.UserServers())
             survivor = QtCore.QPersistentModelIndex(table.sourceModel.index(5, 0))
             removed = QSignalSpy(table.sourceModel.rowsRemoved)
+
             count = table.deleteItemByIndex(
                 [-1, 2, 3, 3, 6, 7, 8, 100], showProgress=False
             )
+
             self.assertEqual(count, 5)
             self.assertEqual(
                 Storage.UserServers(), [profiles[index] for index in (0, 1, 4, 5, 9)]
@@ -1814,10 +1841,12 @@ class ProfileMutationBatchTest(unittest.TestCase):
                 tuple('input' for _ in range(2000)), parent=table
             )
             destroyed = QSignalSpy(dialog.destroyed)
+
             dialog.open()
             QtCore.QTimer.singleShot(
                 0, lambda: QTest.mouseClick(dialog.cancelButton, QtCore.Qt.LeftButton)
             )
+
             self.assertTrue(waitFor(lambda: destroyed.count() == 1))
             self.assertGreater(len(Storage.UserServers()), 0)
             self.assertLessEqual(len(Storage.UserServers()), dialog.BatchSize)
@@ -1844,7 +1873,9 @@ class ProfileMutationBatchTest(unittest.TestCase):
                 parent=table,
             )
             done = QSignalSpy(dialog.finished)
+
             dialog.open()
+
             self.assertTrue(waitFor(lambda: done.count() == 1))
             self.assertEqual(
                 [profile.itemRemark for profile in Storage.UserServers()],
@@ -1859,10 +1890,14 @@ class ProfileMutationBatchTest(unittest.TestCase):
             first, second = self.profile('first'), self.profile('second')
             target = ProfileTestTarget.capture(first)
             activated = QSignalSpy(table.activeServerChanged)
+
             table.appendNewItemsByFactories((first, second))
+
             self.assertEqual(activated.count(), 1)
             self.assertIs(table.profileTestManager.resolveTarget(target), first)
+
             table.deleteItemByIndex((0,), showProgress=False)
+
             self.assertIsNone(table.profileTestManager.resolveTarget(target))
             self.assertFalse(
                 table.profileTestManager.applyResult(
@@ -1884,6 +1919,7 @@ class ProfileMutationBatchTest(unittest.TestCase):
                 table.deleteSelectedItem()
                 table.sourceModel.sort(0, QtCore.Qt.DescendingOrder)
                 confirmation.done(int(confirmation.StandardButton.Yes))
+
                 self.assertTrue(profiles[0].deleted)
                 self.assertEqual(
                     Storage.UserServers(), [profiles[3], profiles[2], profiles[1]]
@@ -1923,6 +1959,7 @@ class ProfileMutationBatchTest(unittest.TestCase):
             ):
                 imported = [self.profile(f'new-{index}') for index in range(count)]
                 inserted = QSignalSpy(table.sourceModel.rowsInserted)
+
                 with mock.patch(
                     'Furious.Actions.Import.profileFromAny', side_effect=imported
                 ):
@@ -1933,6 +1970,7 @@ class ProfileMutationBatchTest(unittest.TestCase):
                 self.assertEqual((inserted.at(0)[1], inserted.at(0)[2]), (2, count + 1))
                 reconcile.assert_called_once_with()
                 progress.assert_not_called()
+
                 if count == 1:
                     singleSuccess.return_value.open.assert_called_once()
                 else:
@@ -1942,6 +1980,7 @@ class ProfileMutationBatchTest(unittest.TestCase):
     def testSmallImportRetainsInvalidInputAndFailureBehavior(self):
         invalid = mock.Mock()
         invalid.isValid.return_value = False
+
         with (
             self.table() as (table, controller),
             mock.patch('Furious.Actions.Import.AppMainWindow', return_value=table),
@@ -1949,13 +1988,17 @@ class ProfileMutationBatchTest(unittest.TestCase):
             mock.patch.object(ImportURIsProgressDialog, 'open') as progress,
         ):
             failure = mock.Mock()
+
             with mock.patch(
                 'Furious.Actions.Import.profileFromAny', return_value=invalid
             ):
                 importURIs('invalid', 'invalid', failureCallback=failure)
+
             failure.assert_called_once_with()
             self.assertFalse(Storage.UserServers())
+
             valid = self.profile('valid')
+
             with (
                 mock.patch(
                     'Furious.Actions.Import.profileFromAny',
@@ -1964,6 +2007,7 @@ class ProfileMutationBatchTest(unittest.TestCase):
                 mock.patch.object(ServerProfile, 'isValid', return_value=True),
             ):
                 importURIs('invalid', 'valid', failureCallback=failure)
+
             self.assertEqual(Storage.UserServers(), [valid])
             failure.assert_called_once_with()
             success.return_value.open.assert_called_once()
@@ -1979,8 +2023,11 @@ class ProfileMutationBatchTest(unittest.TestCase):
             ) as progress,
         ):
             uris = tuple('input' for _ in range(65))
+
             importURIs(*uris)
+
             progress.assert_called_once()
+
             dialog = progress.call_args.args[0]
             self.assertEqual(dialog.uris, uris)
             self.assertEqual(dialog.BatchSize, 128)
@@ -1999,7 +2046,9 @@ class ProfileMutationBatchTest(unittest.TestCase):
             ):
                 profiles = list(Storage.UserServers())
                 indexes = [*range(count), *range(count), -1, 1000]
+
                 deleted = table.deleteItemByIndex(indexes)
+
                 if count <= 64:
                     self.assertEqual(deleted, count)
                     self.assertEqual(Storage.UserServers(), profiles[count:])
@@ -2008,6 +2057,7 @@ class ProfileMutationBatchTest(unittest.TestCase):
                     self.assertEqual(deleted, 0)
                     self.assertEqual(Storage.UserServers(), profiles)
                     progress.assert_called_once()
+
                     dialog = progress.call_args.args[0]
                     self.assertEqual(dialog.total, 65)
                     self.assertEqual(dialog.BatchSize, 128)

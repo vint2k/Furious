@@ -150,6 +150,7 @@ class DeleteServersProgressDialog(AppQTransientDialog):
             for index in sorted(set(indexes))
             if 0 <= index < len(profiles)
         ]
+
         self.showTrayMessage = showTrayMessage
         self.total = len(self.profileIds)
         self.nextIndex = 0
@@ -165,6 +166,7 @@ class DeleteServersProgressDialog(AppQTransientDialog):
         self.statusLabel = AppQLabel()
         self.detailLabel = AppQLabel()
         self.detailLabel.setWordWrap(True)
+
         self.cancelButton = AppQPushButton(_('Cancel'))
 
         connectWeakly(
@@ -204,6 +206,7 @@ class DeleteServersProgressDialog(AppQTransientDialog):
     def updateStatus(self):
         """Update status."""
         self.lastStatusUpdate = time.monotonic()
+
         if self.canceled:
             self.statusLabel.setText(
                 _('Canceling delete') + f'... {self.deletedCount}/{self.total}'
@@ -246,6 +249,7 @@ class DeleteServersProgressDialog(AppQTransientDialog):
             for index, profile in enumerate(profiles)
             if profile.metadata.profileId in profileIds
         ]
+
         self.nextIndex = stop
 
         if indexes:
@@ -984,6 +988,7 @@ class ServerTableView(
         self._registerActionShortcuts(self.contextMenu.actions())
         self._registerActionShortcuts(self.importActions)
         self._registerActionShortcuts(self.testActions)
+
         self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.handleCustomContextMenuRequested)
 
@@ -1764,6 +1769,7 @@ class ServerTableView(
                 AppQMessageBox.StandardButton.Yes
             ):
                 targets = set(_profileIds)
+
                 self.deleteItemByIndex(
                     index
                     for index, profile in enumerate(Storage.UserServers())

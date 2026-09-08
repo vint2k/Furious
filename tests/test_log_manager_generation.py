@@ -1338,16 +1338,19 @@ class GenerationLogManagerContractTest(unittest.TestCase):
             page = LogPage(manager=manager)
             page.resize(900, 420)
             page.show()
+
             for index in range(400):
                 categoryId = (
                     APPLICATION_LOG_CATEGORY if index % 7 == 0 else CORE_LOG_CATEGORY
                 )
                 manager.append(f'line {index:04d}', categoryId)
+
             self.assertTrue(waitFor(lambda: not page._entriesDirty))
             self.assertEqual(
                 page.plainText().splitlines(),
                 [entry.message for entry in manager.entries()],
             )
+
             for categoryId in (CORE_LOG_CATEGORY, APPLICATION_LOG_CATEGORY, 'all'):
                 page.filterComboBox.setCurrentIndex(
                     page.filterComboBox.findData(categoryId)
@@ -1357,13 +1360,16 @@ class GenerationLogManagerContractTest(unittest.TestCase):
                     page.plainText().splitlines(),
                     [entry.message for entry in manager.entries(categoryId)],
                 )
+
             manager.clear(runtimeOnly=True)
             page.filterComboBox.setCurrentIndex(page.filterComboBox.findData('all'))
+
             self.assertTrue(waitFor(lambda: not page._entriesDirty))
             self.assertEqual(
                 page.plainText().splitlines(),
                 [entry.message for entry in manager.entries()],
             )
+
             page.close()
             page.deleteLater()
             collectAtBoundary()
@@ -1390,6 +1396,7 @@ class VeryHeavyGenerationLogManagerTest(unittest.TestCase):
     def testScalingAndStructuralComplexity(self):
         """Measure geometric scaling while structural assertions guard O(1)."""
         results = []
+
         for size in (100, 1_000, 10_000, 100_000):
             manager = LogManager(
                 maximumEntries=size + 10,
@@ -1397,24 +1404,31 @@ class VeryHeavyGenerationLogManagerTest(unittest.TestCase):
                 maximumEntryCharacters=16,
                 autoClearMaximumEntries=size,
             )
+
             for index in range(size):
                 manager.append(str(index), CORE_LOG_CATEGORY)
+
             samples = []
             synchronousTraversals = 0
             synchronousRemovals = 0
+
             for repetition in range(7):
                 if repetition:
                     for index in range(size):
                         manager.append(str(index), CORE_LOG_CATEGORY)
+
                 watched = _ObservedEntries(manager._runtimeGeneration.entries)
                 manager._runtimeGeneration.entries = watched
+
                 started = time.perf_counter_ns()
                 manager.clear(runtimeOnly=True)
                 samples.append(time.perf_counter_ns() - started)
                 synchronousTraversals += watched.iterations
                 synchronousRemovals += watched.oldestRemovals
+
                 self.assertEqual(watched.iterations, 0)
                 self.assertEqual(watched.oldestRemovals, 0)
+
             results.append(
                 {
                     'n': size,
@@ -1423,9 +1437,11 @@ class VeryHeavyGenerationLogManagerTest(unittest.TestCase):
                     'synchronous_removals': synchronousRemovals,
                 }
             )
+
         ratio = results[-1]['runtime_clear_us'] / max(
             results[0]['runtime_clear_us'], 0.001
         )
+
         self.assertLess(ratio, 100)
         self.report('scaling', samples=results, endpoint_ratio=ratio)
 

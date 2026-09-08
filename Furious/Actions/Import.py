@@ -167,6 +167,7 @@ class ImportURIsProgressDialog(AppQTransientDialog):
         self.statusLabel = AppQLabel()
         self.detailLabel = AppQLabel()
         self.detailLabel.setWordWrap(True)
+
         self.cancelButton = AppQPushButton(_('Cancel'))
 
         connectWeakly(
@@ -246,6 +247,7 @@ class ImportURIsProgressDialog(AppQTransientDialog):
         while self.currentIndex < stop and not self.canceled:
             uri = self.uris[self.currentIndex]
             self.currentIndex += 1
+
             factory = profileFromAny(uri.strip())
 
             if factory.isValid():
@@ -514,6 +516,7 @@ class ImportQRCodeOnTheScreenAction(Mixins.CleanupOnExit, AppQAction):
 
         for index, monitor in enumerate(self.sct.monitors[1:], start=1):
             frame = self.sct.grab(monitor)
+
             # Convert raw BGRA bytes to PIL Image
             image = Image.frombytes(
                 'RGB', (frame.width, frame.height), frame.bgra, 'raw', 'BGRX'
