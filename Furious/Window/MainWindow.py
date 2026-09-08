@@ -185,6 +185,10 @@ class MainWindow(AppQMainWindow):
         """Forward a new server profile to the home page."""
         self.homePage.appendNewItemByFactory(factory)
 
+    def appendNewItemsByFactories(self, factories):
+        """Forward a batch of prepared profiles to the server table."""
+        self.homePage.appendNewItemsByFactories(factories)
+
     def flushRow(self, row: int, item: ServerProfile):
         """Forward a server-row refresh to the home page."""
         self.homePage.flushRow(row, item)

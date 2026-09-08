@@ -26,17 +26,16 @@ from Furious.Repository import *
 from Furious.Qt import *
 from Furious.Qt.Signals import connectWeakly, singleShotWeakly
 from Furious.Qt import gettext as _
-from Furious.Widget.WaitingSpinner import *
 
 from PySide6 import QtCore
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QApplication, QFileDialog, QHBoxLayout, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QFileDialog, QVBoxLayout
 
 from PIL import Image
 
 from typing import Callable, Tuple, Union
 
 import os
+import time
 import mss
 import zxingcpp
 import logging
@@ -88,7 +87,7 @@ def importURIFromClipboard(clipboard: str):
 
 def importURIs(*uris, failureCallback: Union[Callable[[], None], None] = None):
     """Import ur is."""
-    if len(uris) > 1:
+    if len(uris) > ImportURIsProgressDialog.SmallOperationLimit:
         dialog = ImportURIsProgressDialog(
             uris,
             failureCallback=failureCallback,
@@ -99,15 +98,18 @@ def importURIs(*uris, failureCallback: Union[Callable[[], None], None] = None):
         return
 
     imported = list()
+    factories = []
     rowIndex = len(Storage.UserServers())
 
     for uri in uris:
         factory = profileFromAny(uri.strip())
 
         if factory.isValid():
-            AppMainWindow().appendNewItemByFactory(factory)
-
+            factories.append(factory)
             imported.append(factory.itemRemark)
+
+    if factories:
+        AppMainWindow().appendNewItemsByFactories(factories)
 
     if len(imported) == 0:
         if callable(failureCallback):
@@ -135,6 +137,10 @@ class ImportURIsProgressDialog(AppQTransientDialog):
     """Present progress and cancellation controls for import ur is."""
 
     DEFAULT_DIALOG_SIZE = QtCore.QSize(420, 150)
+    SmallOperationLimit = 64
+    BatchSize = 128
+    BatchTimeBudget = 0.008
+    ProgressUpdateInterval = 0.1
 
     def __init__(
         self,
@@ -153,19 +159,11 @@ class ImportURIsProgressDialog(AppQTransientDialog):
         self.currentRemark = ''
         self.canceled = False
         self.finishedImport = False
+        self.lastStatusUpdate = 0.0
 
         self.setWindowTitle(_('Import'))
         self.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
 
-        self.spinner = WaitingSpinner(
-            self,
-            center_on_parent=False,
-            lines=12,
-            line_length=7,
-            line_width=3,
-            radius=7,
-            color=QColor(96, 160, 255),
-        )
         self.statusLabel = AppQLabel()
         self.detailLabel = AppQLabel()
         self.detailLabel.setWordWrap(True)
@@ -178,12 +176,8 @@ class ImportURIsProgressDialog(AppQTransientDialog):
             sender=self.cancelButton,
         )
 
-        statusLayout = QHBoxLayout()
-        statusLayout.addWidget(self.spinner)
-        statusLayout.addWidget(self.statusLabel, 1)
-
         layout = QVBoxLayout()
-        layout.addLayout(statusLayout)
+        layout.addWidget(self.statusLabel)
         layout.addWidget(self.detailLabel)
         layout.addWidget(self.cancelButton)
 
@@ -194,8 +188,6 @@ class ImportURIsProgressDialog(AppQTransientDialog):
     def open(self):
         """Open the import ur is progress dialog asynchronously."""
         result = super().open()
-
-        self.spinner.start()
 
         singleShotWeakly(0, self, 'importNext')
 
@@ -213,6 +205,7 @@ class ImportURIsProgressDialog(AppQTransientDialog):
 
     def updateStatus(self):
         """Update status."""
+        self.lastStatusUpdate = time.monotonic()
         total = len(self.uris)
         processed = min(self.currentIndex, total)
 
@@ -237,31 +230,45 @@ class ImportURIsProgressDialog(AppQTransientDialog):
         return remark[:117] + '...'
 
     def importNext(self):
-        """Import next."""
+        """Parse a bounded batch and publish one model insertion before yielding."""
+        if self.finishedImport:
+            return
+
         if self.canceled or self.currentIndex >= len(self.uris):
             self.finishImport()
 
             return
 
-        uri = self.uris[self.currentIndex]
-        self.currentIndex += 1
+        deadline = time.monotonic() + self.BatchTimeBudget
+        stop = min(self.currentIndex + self.BatchSize, len(self.uris))
+        factories = []
 
-        factory = profileFromAny(uri.strip())
+        while self.currentIndex < stop and not self.canceled:
+            uri = self.uris[self.currentIndex]
+            self.currentIndex += 1
+            factory = profileFromAny(uri.strip())
 
-        if factory.isValid():
-            remark = factory.itemRemark
+            if factory.isValid():
+                factories.append(factory)
+                self.currentRemark = self.limitedRemark(factory.itemRemark)
+            else:
+                self.currentRemark = _('Invalid data')
 
-            self.currentRemark = self.limitedRemark(remark)
+            if time.monotonic() >= deadline:
+                break
 
-            AppMainWindow().appendNewItemByFactory(factory)
+        if factories:
+            AppMainWindow().appendNewItemsByFactories(factories)
+            self.imported.extend(factory.itemRemark for factory in factories)
 
-            self.imported.append(remark)
+        if self.canceled or self.currentIndex >= len(self.uris):
+            self.updateStatus()
+            self.finishImport()
         else:
-            self.currentRemark = _('Invalid data')
+            if time.monotonic() - self.lastStatusUpdate >= self.ProgressUpdateInterval:
+                self.updateStatus()
 
-        self.updateStatus()
-
-        singleShotWeakly(0, self, 'importNext')
+            singleShotWeakly(0, self, 'importNext')
 
     def finishImport(self):
         """Handle finish import for the import ur is progress dialog."""
@@ -269,7 +276,6 @@ class ImportURIsProgressDialog(AppQTransientDialog):
             return
 
         self.finishedImport = True
-        self.spinner.stop()
         self.accept()
 
         if self.canceled:

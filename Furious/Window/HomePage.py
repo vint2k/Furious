@@ -1015,6 +1015,10 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
         """Append new item by factory."""
         self.userServersQTableWidget.appendNewItemByFactory(factory)
 
+    def appendNewItemsByFactories(self, factories):
+        """Forward a batch of prepared profiles to the server table."""
+        self.userServersQTableWidget.appendNewItemsByFactories(factories)
+
     def flushRow(self, row: int, item: ServerProfile):
         """Refresh row."""
         self.userServersQTableWidget.flushRow(row, item)

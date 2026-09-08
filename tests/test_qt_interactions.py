@@ -19,15 +19,24 @@
 
 from __future__ import annotations
 
+from Furious.Actions.Import import ImportURIsProgressDialog, importURIs
+from Furious.Backends.Xray.Plugin import XrayPlugin
 from Furious.Controllers import ConnectionState
 from Furious.Controllers.SettingsController import SettingsController
 from Furious.Frozenlib import AppBuiltinProxyMode, AppSettings, Mixins
 from Furious.Models import CoreConfiguration, ServerProfile
+from Furious.Plugins import PluginRegistry
 from Furious.Plugins.API import RoutingOption
 from Furious.Repository import Storage, SubscriptionGroup
+from Furious.Service import ProfileTestField, ProfileTestResult
+from Furious.Service.ProfileTesting import ProfileTestTarget
 from Furious.Qt import AppQAction, AppHue, AppQDialog, AppQSwitch, gettext
 from Furious.Widget.RoutingSelector import RoutingSelector
-from Furious.Widget.ServerTableView import ServerTableView
+from Furious.Widget.ServerTableView import (
+    DeleteServersProgressDialog,
+    MBoxQuestionDelete,
+    ServerTableView,
+)
 from Furious.Widget.SubscriptionTableView import SubscriptionTableView
 from Furious.Window.HomePage import HomePage
 from Furious.Window.SettingsPage import (
@@ -1529,6 +1538,479 @@ class SubscriptionEditorQtInteractionTest(unittest.TestCase):
         collectAtBoundary()
 
         self.assertIsNone(reference())
+
+
+class ProfileMutationBatchTest(unittest.TestCase):
+    """Exercise real model mutations with bounded progress and stable targets."""
+
+    @classmethod
+    def setUpClass(cls):
+        application()
+
+    def tearDown(self):
+        collectAtBoundary()
+
+    @staticmethod
+    def profile(name):
+        return ServerProfile.fromConfiguration(
+            CoreConfiguration({'type': 'fixture'}), {'displayName': name}
+        )
+
+    @contextmanager
+    def table(self, count=0):
+        controller = mock.Mock()
+        controller.isConnected.return_value = False
+
+        with (
+            isolatedSettings(),
+            mock.patch.object(Storage, 'UserServers', return_value=[]),
+            mock.patch(
+                'Furious.Widget.ServerTableView.AppConnectionController',
+                return_value=controller,
+            ),
+        ):
+            Storage.UserServers().extend(
+                self.profile(f'profile-{index:04}') for index in range(count)
+            )
+            AppSettings.set('ActivatedItemIndex', str(count - 1))
+            table = ServerTableView(
+                configurationEditorFactory=QWidget,
+                qrCodeWindowFactory=QWidget,
+                importActionsFactory=tuple,
+            )
+            table.sourceModel.refreshIndexes()
+
+            try:
+                yield table, controller
+            finally:
+                table.cleanup()
+                table.close()
+                table.deleteLater()
+                processQtEvents()
+
+    def testImportCoalescesRowsAndProgressWithoutLosingInvalidInputPositions(self):
+        profiles = [self.profile(str(index)) for index in range(600)]
+        invalid = mock.Mock()
+        invalid.isValid.return_value = False
+        parsed = [
+            invalid if index in (200, 501) else item
+            for index, item in enumerate(profiles)
+        ]
+        expected = [item for item in parsed if item is not invalid]
+
+        with (
+            self.table() as (table, controller),
+            mock.patch('Furious.Actions.Import.AppMainWindow', return_value=table),
+            mock.patch('Furious.Actions.Import.profileFromAny', side_effect=parsed),
+            mock.patch.object(ServerProfile, 'isValid', return_value=True),
+            mock.patch('Furious.Actions.Import.time') as clock,
+            mock.patch('Furious.Actions.Import.singleShotWeakly') as schedule,
+            mock.patch('Furious.Actions.Import.MBoxImportMultiSuccess') as success,
+            mock.patch.object(
+                table, 'reconcileProfileTestJobs', wraps=table.reconcileProfileTestJobs
+            ) as reconcile,
+            mock.patch.object(
+                table.sourceModel,
+                'refreshIndexes',
+                wraps=table.sourceModel.refreshIndexes,
+            ) as refresh,
+        ):
+            clock.monotonic.return_value = 10.0
+            failure = mock.Mock()
+            dialog = ImportURIsProgressDialog(
+                tuple('input' for _ in parsed), failure, parent=table
+            )
+            inserted = QSignalSpy(table.sourceModel.rowsInserted)
+
+            with mock.patch.object(
+                dialog, 'updateStatus', wraps=dialog.updateStatus
+            ) as status:
+                dialog.importNext()
+                self.assertEqual(dialog.currentIndex, 128)
+                self.assertEqual(len(Storage.UserServers()), 128)
+                status.assert_not_called()
+                clock.monotonic.return_value = 10.101
+                dialog.importNext()
+                self.assertEqual(dialog.currentIndex, 256)
+                self.assertEqual(status.call_count, 1)
+                self.assertIn('256/600', dialog.statusLabel.text())
+                for _index in range(4):
+                    dialog.importNext()
+                self.assertEqual(status.call_count, 2)
+
+            self.assertEqual(Storage.UserServers(), expected)
+            self.assertEqual(dialog.imported, [item.itemRemark for item in expected])
+            self.assertEqual(
+                [item.index for item in expected], list(range(len(expected)))
+            )
+            self.assertEqual(inserted.count(), 5)
+            self.assertEqual(
+                [(inserted.at(i)[1], inserted.at(i)[2]) for i in range(5)],
+                [(0, 127), (128, 254), (255, 382), (383, 509), (510, 597)],
+            )
+            self.assertEqual(reconcile.call_count, 5)
+            refresh.assert_not_called()
+            self.assertEqual(schedule.call_count, 4)
+            success.return_value.open.assert_called_once()
+            failure.assert_not_called()
+            self.assertEqual(Storage.UserActivatedItemIndex(), 0)
+
+    def testSlowParserYieldsAndCancellationPreservesCommittedBatch(self):
+        with (
+            self.table() as (table, controller),
+            mock.patch('Furious.Actions.Import.AppMainWindow', return_value=table),
+            mock.patch.object(ServerProfile, 'isValid', return_value=True),
+            mock.patch('Furious.Actions.Import.time') as clock,
+            mock.patch('Furious.Actions.Import.singleShotWeakly'),
+            mock.patch('Furious.Actions.Import.MBoxImportSuccess') as success,
+        ):
+            clock.monotonic.return_value = 10.0
+            profile = self.profile('first')
+
+            def parse(_uri):
+                clock.monotonic.return_value += 0.010
+                return profile
+
+            with mock.patch(
+                'Furious.Actions.Import.profileFromAny', side_effect=parse
+            ) as parser:
+                dialog = ImportURIsProgressDialog(
+                    ('first', 'second', 'third'), parent=table
+                )
+                dialog.importNext()
+                self.assertEqual(dialog.currentIndex, 1)
+                self.assertEqual(Storage.UserServers(), [profile])
+                dialog.cancel()
+                dialog.importNext()
+                dialog.importNext()
+                self.assertTrue(dialog.finishedImport)
+                parser.assert_called_once()
+                success.assert_not_called()
+
+    def testInvalidImportReportsFailureOnce(self):
+        invalid = mock.Mock()
+        invalid.isValid.return_value = False
+
+        with (
+            self.table() as (table, controller),
+            mock.patch('Furious.Actions.Import.profileFromAny', return_value=invalid),
+            mock.patch('Furious.Actions.Import.AppMainWindow') as window,
+        ):
+            failure = mock.Mock()
+            dialog = ImportURIsProgressDialog(
+                ('invalid', 'invalid'), failure, parent=table
+            )
+            dialog.importNext()
+            dialog.importNext()
+            failure.assert_called_once_with()
+            window.assert_not_called()
+            self.assertEqual(Storage.UserServers(), [])
+
+    def testDeletionCoalescesContiguousRowsAndDisconnectsActiveProfileOnce(self):
+        with (
+            self.table(1000) as (table, controller),
+            mock.patch('Furious.Widget.ServerTableView.time') as clock,
+            mock.patch('Furious.Widget.ServerTableView.singleShotWeakly') as schedule,
+            mock.patch.object(
+                table, 'reconcileProfileTestJobs', wraps=table.reconcileProfileTestJobs
+            ) as reconcile,
+        ):
+            clock.monotonic.return_value = 10.0
+            controller.isConnected.return_value = True
+            profiles = list(Storage.UserServers())
+            removed = QSignalSpy(table.sourceModel.rowsRemoved)
+            activated = QSignalSpy(table.activeServerChanged)
+            dialog = DeleteServersProgressDialog(table, range(1000), parent=table)
+
+            with mock.patch.object(
+                dialog, 'updateStatus', wraps=dialog.updateStatus
+            ) as status:
+                dialog.deleteNext()
+                self.assertIs(
+                    Storage.UserServers()[Storage.UserActivatedItemIndex()],
+                    profiles[-1],
+                )
+                self.assertEqual(dialog.deletedCount, 128)
+                controller.startDisconnection.assert_not_called()
+                status.assert_not_called()
+                clock.monotonic.return_value = 10.101
+                dialog.deleteNext()
+                self.assertIn('256/1000', dialog.statusLabel.text())
+                for _index in range(7):
+                    dialog.deleteNext()
+                self.assertEqual(status.call_count, 2)
+
+            self.assertEqual(Storage.UserServers(), [])
+            self.assertTrue(all(profile.deleted for profile in profiles))
+            self.assertEqual(removed.count(), 8)
+            self.assertEqual(reconcile.call_count, 8)
+            self.assertEqual(schedule.call_count, 7)
+            self.assertEqual(Storage.UserActivatedItemIndex(), -1)
+            self.assertEqual(activated.count(), 1)
+            controller.startDisconnection.assert_called_once()
+
+    def testDeletionKeepsCapturedTargetsAcrossSortRemovalAndCancellation(self):
+        with (
+            self.table(6) as (table, controller),
+            mock.patch('Furious.Widget.ServerTableView.singleShotWeakly'),
+        ):
+            profiles = list(Storage.UserServers())
+            dialog = DeleteServersProgressDialog(table, range(5), parent=table)
+            dialog.BatchSize = 2
+            dialog.deleteNext()
+            self.assertEqual(Storage.UserServers(), profiles[2:])
+            table.sourceModel.sort(0, QtCore.Qt.DescendingOrder)
+            table.deleteItemByIndex([3], showProgress=False)
+            newcomer = self.profile('new')
+            table.appendNewItemByFactory(newcomer)
+            dialog.deleteNext()
+            dialog.cancel()
+            dialog.deleteNext()
+
+            self.assertEqual(dialog.deletedCount, 3)
+            self.assertEqual(
+                Storage.UserServers(), [profiles[5], profiles[4], newcomer]
+            )
+            self.assertEqual(
+                [profile.index for profile in Storage.UserServers()], [0, 1, 2]
+            )
+            self.assertIs(
+                Storage.UserServers()[Storage.UserActivatedItemIndex()], profiles[5]
+            )
+            controller.startDisconnection.assert_not_called()
+
+    def testSparseDeletionPreservesPersistentIndexesAndIgnoresInvalidRows(self):
+        with self.table(10) as (table, controller):
+            profiles = list(Storage.UserServers())
+            survivor = QtCore.QPersistentModelIndex(table.sourceModel.index(5, 0))
+            removed = QSignalSpy(table.sourceModel.rowsRemoved)
+            count = table.deleteItemByIndex(
+                [-1, 2, 3, 3, 6, 7, 8, 100], showProgress=False
+            )
+            self.assertEqual(count, 5)
+            self.assertEqual(
+                Storage.UserServers(), [profiles[index] for index in (0, 1, 4, 5, 9)]
+            )
+            self.assertEqual(
+                [(removed.at(i)[1], removed.at(i)[2]) for i in range(2)],
+                [(6, 8), (2, 3)],
+            )
+            self.assertTrue(survivor.isValid())
+            self.assertEqual(survivor.row(), 3)
+            self.assertEqual(Storage.UserActivatedItemIndex(), 4)
+
+    def testRealCancelInputStopsImportBetweenBatchesAndDestroysDialog(self):
+        with (
+            self.table() as (table, controller),
+            mock.patch('Furious.Actions.Import.AppMainWindow', return_value=table),
+            mock.patch(
+                'Furious.Actions.Import.profileFromAny',
+                side_effect=lambda _uri: self.profile('input'),
+            ),
+            mock.patch.object(ServerProfile, 'isValid', return_value=True),
+            mock.patch('Furious.Actions.Import.MBoxImportMultiSuccess') as success,
+        ):
+            dialog = ImportURIsProgressDialog(
+                tuple('input' for _ in range(2000)), parent=table
+            )
+            destroyed = QSignalSpy(dialog.destroyed)
+            dialog.open()
+            QtCore.QTimer.singleShot(
+                0, lambda: QTest.mouseClick(dialog.cancelButton, QtCore.Qt.LeftButton)
+            )
+            self.assertTrue(waitFor(lambda: destroyed.count() == 1))
+            self.assertGreater(len(Storage.UserServers()), 0)
+            self.assertLessEqual(len(Storage.UserServers()), dialog.BatchSize)
+            success.assert_not_called()
+
+    def testRealParserImportsValidProfilesAmongInvalidInputs(self):
+        registry = PluginRegistry()
+        registry.register(XrayPlugin())
+
+        with (
+            mock.patch(
+                'Furious.Plugins.Profile.getPluginRegistry', return_value=registry
+            ),
+            self.table() as (table, controller),
+            mock.patch('Furious.Actions.Import.AppMainWindow', return_value=table),
+            mock.patch('Furious.Actions.Import.MBoxImportMultiSuccess') as success,
+        ):
+            dialog = ImportURIsProgressDialog(
+                (
+                    'socks://example.test:1080#first',
+                    'invalid',
+                    'socks://example.test:1081#second',
+                ),
+                parent=table,
+            )
+            done = QSignalSpy(dialog.finished)
+            dialog.open()
+            self.assertTrue(waitFor(lambda: done.count() == 1))
+            self.assertEqual(
+                [profile.itemRemark for profile in Storage.UserServers()],
+                ['first', 'second'],
+            )
+            self.assertTrue(all(profile.isValid() for profile in Storage.UserServers()))
+            success.return_value.open.assert_called_once()
+
+    def testInsertionPreservesInitialActiveNotificationAndRefreshesTestTargets(self):
+        with self.table() as (table, controller):
+            AppSettings.set('ActivatedItemIndex', '0')
+            first, second = self.profile('first'), self.profile('second')
+            target = ProfileTestTarget.capture(first)
+            activated = QSignalSpy(table.activeServerChanged)
+            table.appendNewItemsByFactories((first, second))
+            self.assertEqual(activated.count(), 1)
+            self.assertIs(table.profileTestManager.resolveTarget(target), first)
+            table.deleteItemByIndex((0,), showProgress=False)
+            self.assertIsNone(table.profileTestManager.resolveTarget(target))
+            self.assertFalse(
+                table.profileTestManager.applyResult(
+                    target, ProfileTestResult(ProfileTestField.Latency, 'stale')
+                )
+            )
+            self.assertEqual(first.metadata.latency, '')
+
+    def testDeleteConfirmationKeepsOriginalTargetAfterSorting(self):
+        with self.table(4) as (table, controller):
+            profiles = list(Storage.UserServers())
+            table.setCurrentIndex(table.proxyIndexFromSourceRow(0))
+            confirmation = MBoxQuestionDelete(parent=table)
+
+            with mock.patch(
+                'Furious.Widget.ServerTableView.MBoxQuestionDelete',
+                return_value=confirmation,
+            ):
+                table.deleteSelectedItem()
+                table.sourceModel.sort(0, QtCore.Qt.DescendingOrder)
+                confirmation.done(int(confirmation.StandardButton.Yes))
+                self.assertTrue(profiles[0].deleted)
+                self.assertEqual(
+                    Storage.UserServers(), [profiles[3], profiles[2], profiles[1]]
+                )
+                self.assertIs(
+                    Storage.UserServers()[Storage.UserActivatedItemIndex()], profiles[3]
+                )
+
+    def testBatchPreparationFailureDoesNotPublishPartialRows(self):
+        with self.table(1) as (table, controller):
+            original = list(Storage.UserServers())
+            inserted = QSignalSpy(table.sourceModel.rowsInserted)
+
+            with self.assertRaises(TypeError):
+                table.appendNewItemsByFactories((self.profile('valid'), object()))
+
+            self.assertEqual(Storage.UserServers(), original)
+            self.assertEqual(inserted.count(), 0)
+
+    def testSmallImportsCompleteDirectlyWithOneInsertion(self):
+        for count in (1, 64):
+            with (
+                self.subTest(count=count),
+                self.table(2) as (table, controller),
+                mock.patch('Furious.Actions.Import.AppMainWindow', return_value=table),
+                mock.patch.object(ServerProfile, 'isValid', return_value=True),
+                mock.patch('Furious.Actions.Import.MBoxImportSuccess') as singleSuccess,
+                mock.patch(
+                    'Furious.Actions.Import.MBoxImportMultiSuccess'
+                ) as multiSuccess,
+                mock.patch.object(ImportURIsProgressDialog, 'open') as progress,
+                mock.patch.object(
+                    table,
+                    'reconcileProfileTestJobs',
+                    wraps=table.reconcileProfileTestJobs,
+                ) as reconcile,
+            ):
+                imported = [self.profile(f'new-{index}') for index in range(count)]
+                inserted = QSignalSpy(table.sourceModel.rowsInserted)
+                with mock.patch(
+                    'Furious.Actions.Import.profileFromAny', side_effect=imported
+                ):
+                    importURIs(*('input' for _ in range(count)))
+
+                self.assertEqual(Storage.UserServers()[2:], imported)
+                self.assertEqual(inserted.count(), 1)
+                self.assertEqual((inserted.at(0)[1], inserted.at(0)[2]), (2, count + 1))
+                reconcile.assert_called_once_with()
+                progress.assert_not_called()
+                if count == 1:
+                    singleSuccess.return_value.open.assert_called_once()
+                else:
+                    multiSuccess.return_value.open.assert_called_once()
+                    self.assertEqual(multiSuccess.return_value.rowIndex, 2)
+
+    def testSmallImportRetainsInvalidInputAndFailureBehavior(self):
+        invalid = mock.Mock()
+        invalid.isValid.return_value = False
+        with (
+            self.table() as (table, controller),
+            mock.patch('Furious.Actions.Import.AppMainWindow', return_value=table),
+            mock.patch('Furious.Actions.Import.MBoxImportSuccess') as success,
+            mock.patch.object(ImportURIsProgressDialog, 'open') as progress,
+        ):
+            failure = mock.Mock()
+            with mock.patch(
+                'Furious.Actions.Import.profileFromAny', return_value=invalid
+            ):
+                importURIs('invalid', 'invalid', failureCallback=failure)
+            failure.assert_called_once_with()
+            self.assertFalse(Storage.UserServers())
+            valid = self.profile('valid')
+            with (
+                mock.patch(
+                    'Furious.Actions.Import.profileFromAny',
+                    side_effect=(invalid, valid),
+                ),
+                mock.patch.object(ServerProfile, 'isValid', return_value=True),
+            ):
+                importURIs('invalid', 'valid', failureCallback=failure)
+            self.assertEqual(Storage.UserServers(), [valid])
+            failure.assert_called_once_with()
+            success.return_value.open.assert_called_once()
+            progress.assert_not_called()
+
+    def testImportsAboveCutoffUseTheExistingProgressBatches(self):
+        with (
+            self.table() as (table, controller),
+            mock.patch('Furious.Actions.Import.AppMainWindow', return_value=table),
+            mock.patch('Furious.Actions.Import.profileFromAny') as parser,
+            mock.patch.object(
+                ImportURIsProgressDialog, 'open', autospec=True
+            ) as progress,
+        ):
+            uris = tuple('input' for _ in range(65))
+            importURIs(*uris)
+            progress.assert_called_once()
+            dialog = progress.call_args.args[0]
+            self.assertEqual(dialog.uris, uris)
+            self.assertEqual(dialog.BatchSize, 128)
+            self.assertEqual(dialog.currentIndex, 0)
+            parser.assert_not_called()
+            self.assertFalse(Storage.UserServers())
+
+    def testDeletionCutoffCountsOnlyDistinctValidTargets(self):
+        for count in (1, 64, 65):
+            with (
+                self.subTest(count=count),
+                self.table(70) as (table, controller),
+                mock.patch.object(
+                    DeleteServersProgressDialog, 'open', autospec=True
+                ) as progress,
+            ):
+                profiles = list(Storage.UserServers())
+                indexes = [*range(count), *range(count), -1, 1000]
+                deleted = table.deleteItemByIndex(indexes)
+                if count <= 64:
+                    self.assertEqual(deleted, count)
+                    self.assertEqual(Storage.UserServers(), profiles[count:])
+                    progress.assert_not_called()
+                else:
+                    self.assertEqual(deleted, 0)
+                    self.assertEqual(Storage.UserServers(), profiles)
+                    progress.assert_called_once()
+                    dialog = progress.call_args.args[0]
+                    self.assertEqual(dialog.total, 65)
+                    self.assertEqual(dialog.BatchSize, 128)
 
 
 if __name__ == '__main__':

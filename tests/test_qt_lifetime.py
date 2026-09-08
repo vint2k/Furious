@@ -487,8 +487,7 @@ raise SystemExit(application.exec())
         collectAtBoundary()
 
         self.assertAllDestroyed(references, destroyed, iterations)
-        self.assertEqual(table.sourceModel.refreshIndexes.call_count, iterations)
-        self.assertEqual(table.sourceModel.emitAllChanged.call_count, iterations)
+        table.deleteItemByIndex.assert_not_called()
 
     def testTextEditorIndentCompletionReceivesExactTransientDialog(self):
         """Apply indentation through explicit weak sender forwarding."""

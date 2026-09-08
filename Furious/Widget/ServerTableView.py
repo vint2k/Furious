@@ -39,7 +39,6 @@ from Furious.Service import (
     SubscriptionManager,
     SubscriptionUpdateBatch,
 )
-from Furious.Widget.WaitingSpinner import WaitingSpinner
 
 from PySide6 import QtCore
 from PySide6.QtGui import *
@@ -48,6 +47,7 @@ from PySide6.QtWidgets import *
 from typing import Callable, Union
 
 import re
+import time
 import logging
 import functools
 
@@ -135,34 +135,33 @@ class DeleteServersProgressDialog(AppQTransientDialog):
     """Present progress and cancellation controls for delete servers."""
 
     DEFAULT_DIALOG_SIZE = QtCore.QSize(420, 150)
+    SmallOperationLimit = 64
+    BatchSize = 128
+    ProgressUpdateInterval = 0.1
 
     def __init__(self, table, indexes, showTrayMessage=True, parent=None):
         """Initialize the DeleteServersProgressDialog."""
         super().__init__(parent)
 
         self.table = table
-        self.indexes = list(indexes)
+        profiles = Storage.UserServers()
+        self.profileIds = [
+            profiles[index].metadata.profileId
+            for index in sorted(set(indexes))
+            if 0 <= index < len(profiles)
+        ]
         self.showTrayMessage = showTrayMessage
-        self.total = len(self.indexes)
+        self.total = len(self.profileIds)
         self.nextIndex = 0
         self.deletedCount = 0
-        self.deletedActivated = False
         self.canceled = False
         self.finishedDeletion = False
+        self.lastStatusUpdate = 0.0
         self.currentRemark = ''
 
         self.setWindowTitle(_('Delete'))
         self.setWindowModality(QtCore.Qt.WindowModality.ApplicationModal)
 
-        self.spinner = WaitingSpinner(
-            self,
-            center_on_parent=False,
-            lines=12,
-            line_length=7,
-            line_width=3,
-            radius=7,
-            color=QColor(96, 160, 255),
-        )
         self.statusLabel = AppQLabel()
         self.detailLabel = AppQLabel()
         self.detailLabel.setWordWrap(True)
@@ -175,12 +174,8 @@ class DeleteServersProgressDialog(AppQTransientDialog):
             sender=self.cancelButton,
         )
 
-        statusLayout = QHBoxLayout()
-        statusLayout.addWidget(self.spinner)
-        statusLayout.addWidget(self.statusLabel, 1)
-
         layout = QVBoxLayout()
-        layout.addLayout(statusLayout)
+        layout.addWidget(self.statusLabel)
         layout.addWidget(self.detailLabel)
         layout.addWidget(self.cancelButton)
 
@@ -190,11 +185,11 @@ class DeleteServersProgressDialog(AppQTransientDialog):
 
     def open(self):
         """Open the delete servers progress dialog asynchronously."""
-        self.spinner.start()
+        result = super().open()
 
         singleShotWeakly(0, self, 'deleteNext')
 
-        return super().open()
+        return result
 
     def reject(self):
         """Reject the current delete servers progress dialog values."""
@@ -208,6 +203,7 @@ class DeleteServersProgressDialog(AppQTransientDialog):
 
     def updateStatus(self):
         """Update status."""
+        self.lastStatusUpdate = time.monotonic()
         if self.canceled:
             self.statusLabel.setText(
                 _('Canceling delete') + f'... {self.deletedCount}/{self.total}'
@@ -233,79 +229,46 @@ class DeleteServersProgressDialog(AppQTransientDialog):
         return remark[:117] + '...'
 
     def deleteNext(self):
-        """Delete next."""
+        """Resolve captured identities and remove one bounded batch."""
+        if self.finishedDeletion:
+            return
+
         if self.canceled or self.nextIndex >= self.total:
             self.finishDeletion()
 
             return
 
-        originalIndex = self.indexes[self.nextIndex]
-        self.nextIndex += 1
-        deleteIndex = originalIndex - self.deletedCount
+        stop = min(self.nextIndex + self.BatchSize, self.total)
+        profileIds = set(self.profileIds[self.nextIndex : stop])
+        profiles = Storage.UserServers()
+        indexes = [
+            index
+            for index, profile in enumerate(profiles)
+            if profile.metadata.profileId in profileIds
+        ]
+        self.nextIndex = stop
 
-        if deleteIndex < 0 or deleteIndex >= len(Storage.UserServers()):
+        if indexes:
+            self.currentRemark = self.limitedRemark(profiles[indexes[-1]].itemRemark)
+            self.deletedCount += self.table.deleteItemByIndex(
+                indexes, showTrayMessage=self.showTrayMessage, showProgress=False
+            )
+
+        if self.canceled or self.nextIndex >= self.total:
             self.updateStatus()
+            self.finishDeletion()
+        else:
+            if time.monotonic() - self.lastStatusUpdate >= self.ProgressUpdateInterval:
+                self.updateStatus()
 
             singleShotWeakly(0, self, 'deleteNext')
 
-            return
-
-        factory = Storage.UserServers()[deleteIndex]
-
-        self.currentRemark = self.limitedRemark(factory.itemRemark)
-
-        if originalIndex == Storage.UserActivatedItemIndex():
-            self.deletedActivated = True
-
-        self.table.sourceModel.beginRemoveRows(
-            QtCore.QModelIndex(),
-            deleteIndex,
-            deleteIndex,
-        )
-
-        factory.deleted = True
-
-        Storage.UserServers().pop(deleteIndex)
-
-        self.table.sourceModel.endRemoveRows()
-
-        self.table.reconcileProfileTestJobs()
-
-        if not self.deletedActivated and deleteIndex < Storage.UserActivatedItemIndex():
-            AppSettings.set(
-                'ActivatedItemIndex', str(Storage.UserActivatedItemIndex() - 1)
-            )
-
-        self.deletedCount += 1
-
-        self.updateStatus()
-
-        singleShotWeakly(0, self, 'deleteNext')
-
     def finishDeletion(self):
-        """Handle finish deletion for the delete servers progress dialog."""
+        """Stop the completed or cancelled operation exactly once."""
         if self.finishedDeletion:
             return
 
         self.finishedDeletion = True
-        self.spinner.stop()
-
-        self.table.sourceModel.refreshIndexes()
-        self.table.sourceModel.emitAllChanged()
-
-        if self.deletedActivated:
-            # Set invalid first
-            AppSettings.set('ActivatedItemIndex', str(-1))
-
-            self.table.activeServerChanged.emit()
-
-            controller = AppConnectionController()
-
-            if controller.isConnected():
-                controller.startDisconnection(
-                    _('Disconnected') if self.showTrayMessage else ''
-                )
-
         self.accept()
 
     def retranslate(self):
@@ -1716,13 +1679,17 @@ class ServerTableView(
         self, indexes, showTrayMessage=True, showProgress=True
     ) -> int:
         """Delete item by index."""
-        indexes = sorted(set(indexes))
+        profiles = Storage.UserServers()
+        indexes = sorted({index for index in indexes if 0 <= index < len(profiles)})
 
         if len(indexes) == 0:
             # Nothing selected. Do nothing
             return 0
 
-        if showProgress and len(indexes) > 1:
+        if (
+            showProgress
+            and len(indexes) > DeleteServersProgressDialog.SmallOperationLimit
+        ):
             dialog = DeleteServersProgressDialog(
                 self,
                 indexes,
@@ -1734,30 +1701,34 @@ class ServerTableView(
 
             return 0
 
-        if Storage.UserActivatedItemIndex() in indexes:
-            deleteActivated = True
-        else:
-            deleteActivated = False
+        activatedIndex = Storage.UserActivatedItemIndex()
+        deleteActivated = activatedIndex in indexes
+        ranges = []
 
-        # Note: param indexes must be sorted
-        for i in range(len(indexes)):
-            deleteIndex = indexes[i] - i
+        for index in indexes:
+            if ranges and index == ranges[-1][1] + 1:
+                ranges[-1] = (ranges[-1][0], index)
+            else:
+                ranges.append((index, index))
 
-            self.sourceModel.beginRemoveRows(
-                QtCore.QModelIndex(),
-                deleteIndex,
-                deleteIndex,
-            )
+        # Descending ranges preserve the remaining source rows and Qt selections.
+        for first, last in reversed(ranges):
+            self.sourceModel.beginRemoveRows(QtCore.QModelIndex(), first, last)
 
-            Storage.UserServers()[deleteIndex].deleted = True
-            Storage.UserServers().pop(deleteIndex)
+            for profile in profiles[first : last + 1]:
+                profile.deleted = True
+
+            del profiles[first : last + 1]
+
+            if first <= activatedIndex <= last:
+                activatedIndex = -1
+            elif last < activatedIndex:
+                activatedIndex -= last - first + 1
+
+            if activatedIndex != Storage.UserActivatedItemIndex():
+                AppSettings.set('ActivatedItemIndex', str(activatedIndex))
 
             self.sourceModel.endRemoveRows()
-
-            if not deleteActivated and deleteIndex < Storage.UserActivatedItemIndex():
-                AppSettings.set(
-                    'ActivatedItemIndex', str(Storage.UserActivatedItemIndex() - 1)
-                )
 
         self.reconcileProfileTestJobs()
 
@@ -1766,9 +1737,6 @@ class ServerTableView(
         self.sourceModel.emitAllChanged()
 
         if deleteActivated:
-            # Set invalid first
-            AppSettings.set('ActivatedItemIndex', str(-1))
-
             self.activeServerChanged.emit()
 
             controller = AppConnectionController()
@@ -1788,12 +1756,19 @@ class ServerTableView(
             # Nothing selected. Do nothing
             return
 
-        def handleResultCode(_indexes, code):
+        profileIds = self._profileIdsForSourceRows(indexes)
+
+        def handleResultCode(_profileIds, code):
             """Handle result code."""
             if code == PySide6Legacy.enumValueWrapper(
                 AppQMessageBox.StandardButton.Yes
             ):
-                self.deleteItemByIndex(_indexes)
+                targets = set(_profileIds)
+                self.deleteItemByIndex(
+                    index
+                    for index, profile in enumerate(Storage.UserServers())
+                    if profile.metadata.profileId in targets
+                )
             else:
                 pass
 
@@ -1812,7 +1787,7 @@ class ServerTableView(
             f'{indexes[0] + 1} - ' + Storage.UserServers()[indexes[0]].itemRemark
         )
         mbox.setText(mbox.customText())
-        mbox.finished.connect(functools.partial(handleResultCode, indexes))
+        mbox.finished.connect(functools.partial(handleResultCode, profileIds))
 
         # Show the MessageBox asynchronously
         mbox.open()
@@ -2003,29 +1978,36 @@ class ServerTableView(
         mbox.open()
 
     def appendNewItemByFactory(self, factory: CoreConfiguration | ServerProfile):
-        """Append new item by factory."""
-        factory = ensureProfile(factory)
-        index = len(Storage.UserServers())
+        """Append one profile through the shared insertion boundary."""
+        self.appendNewItemsByFactories((factory,))
 
-        # Set index
-        factory.index = index
+    def appendNewItemsByFactories(self, factories):
+        """Append prepared profiles with one structural notification and reconciliation."""
+        factories = [ensureProfile(factory) for factory in factories]
 
-        self.sourceModel.beginInsertRows(QtCore.QModelIndex(), index, index)
+        if not factories:
+            return
 
-        Storage.UserServers().append(factory)
+        profiles = Storage.UserServers()
+        first = len(profiles)
 
+        for index, factory in enumerate(factories, first):
+            factory.index = index
+
+        self.sourceModel.beginInsertRows(
+            QtCore.QModelIndex(), first, first + len(factories) - 1
+        )
+        profiles.extend(factories)
         self.sourceModel.endInsertRows()
-        self.sourceModel.refreshIndexes()
+        self.reconcileProfileTestJobs()
 
-        self.flushRow(index, factory)
+        if first <= Storage.UserActivatedItemIndex() < first + len(factories):
+            self.activeServerChanged.emit()
 
-        if index == 0:
-            # The first one. Click it
+        if first == 0:
             self.setCurrentIndex(self.proxyIndexFromSourceRow(0))
 
-            # Try to be user-friendly in some extreme cases
             if not AppConnectionController().isConnected():
-                # Activate automatically
                 self.activateItemByIndex(0, True)
 
     def appendNewItem(self, **kwargs):
