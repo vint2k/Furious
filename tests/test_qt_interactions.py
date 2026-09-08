@@ -1127,13 +1127,13 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                     pos=home.tunModeSwitch.rect().center(),
                 )
 
-                QTest.qWait(40)
-
                 for switch in (home.tunModeSwitch, tunCard.checkBox):
-                    self.assertGreater(switch.thumbPosition, 0.0)
-                    self.assertLess(switch.thumbPosition, 1.0)
+                    self.assertEqual(
+                        switch._animation.state(),
+                        QtCore.QAbstractAnimation.State.Running,
+                    )
 
-                QTest.qWait(AppQSwitch.AnimationDuration)
+                QTest.qWait(AppQSwitch.AnimationDuration + 40)
                 processQtEvents()
 
                 self.assertTrue(home.tunModeSwitch.isChecked())
@@ -1148,13 +1148,13 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                     pos=tunCard.checkBox.rect().center(),
                 )
 
-                QTest.qWait(40)
-
                 for switch in (home.tunModeSwitch, tunCard.checkBox):
-                    self.assertGreater(switch.thumbPosition, 0.0)
-                    self.assertLess(switch.thumbPosition, 1.0)
+                    self.assertEqual(
+                        switch._animation.state(),
+                        QtCore.QAbstractAnimation.State.Running,
+                    )
 
-                QTest.qWait(AppQSwitch.AnimationDuration)
+                QTest.qWait(AppQSwitch.AnimationDuration + 40)
                 processQtEvents()
 
                 self.assertFalse(home.tunModeSwitch.isChecked())
