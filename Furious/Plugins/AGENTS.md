@@ -1,8 +1,7 @@
 # Plugin guidance
 
 Inherit the root and package guides; consult Interface guidance for runtime/storage contracts. This scope owns
-capability definitions, atomic registration, dispatch,
-and plugin lifecycle; concrete backend policy remains in each implementation.
+capability definitions, atomic registration, dispatch, and plugin lifecycle; backend policy remains in each implementation.
 
 ## Contracts and registry
 
@@ -34,10 +33,10 @@ and plugin lifecycle; concrete backend policy remains in each implementation.
   state. Backend-specific defaults, settings keys, document branches, and host assumptions stay behind the provider
   rather than becoming undeclared registry requirements.
 - API-version-3 runtime factories return `PreparedRuntime` directly. The runtime is fully prepared before return,
-  starts with zero arguments, raises typed startup failures, and exposes readiness separately; do not add legacy
-  launch adapters, Boolean startup side channels, or alternate factory-result shapes. The registry's existing
-  synchronous `startCoreRuntime()` wrapper separately returns runtime/success for compatibility; preserve ownership
-  on start failure.
+  starts with zero arguments, raises typed startup failures, and exposes readiness separately. An alternate result
+  shape requires an explicit contract/version migration, not an implicit adapter inferred from built-in factories.
+  The registry's existing synchronous `startCoreRuntime()` wrapper separately returns runtime/success for
+  compatibility; preserve ownership on start failure.
 - `TUNPreparationError` is the explicit terminal native-TUN failure contract. Other provider exceptions currently
   log and return an unhandled result; required TUN rejection must use the typed error rather than assume all
   exceptions stop fallback. Optional capabilities may be absent; an External Core need not implement statistics or

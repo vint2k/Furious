@@ -1,8 +1,7 @@
 # Hysteria 2 guidance
 
 Inherit the root, package, and common backend guides; consult Plugins for capability contracts. This scope owns
-Hysteria 2's nested upstream document, native-TUN
-capability, statistics, and editor projection.
+Hysteria 2's nested upstream document, native-TUN capability, statistics, and editor projection.
 
 ## Native document and editor projection
 
@@ -24,12 +23,13 @@ capability, statistics, and editor projection.
 - The statistics provider is a process-lifetime capability; the runtime captures a configured server-API target and
   sampling owns its monitor/query lifetime. API URL, client ID, and authorization secret are distinct from client
   connection credentials. Keep requests bounded, validate counters, and never log the secret or infer statistics
-  from merely having a running Hysteria2 process.
+  from merely having a running Hysteria2 process. The configured server statistics target is separate from the
+  client's local readiness endpoint; capability availability does not imply a usable target was configured.
 - Capability presence is independent: native TUN, statistics, actions, settings, routing, and protocol editing must
   continue to work or fail through their own declared contracts rather than being inferred from the runtime type.
 - Verify nested sibling/default preservation, known and unknown values, obfuscation switching, URI/document
-  equality, every native/application-TUN and resolution case, probe stripping, readiness/exit cleanup, statistics
-  cancellation, and repeated transient editor/settings-dialog destruction. Keep this guide synchronized with
+  projection preservation, every native/application-TUN and resolution case, probe stripping, readiness/exit cleanup,
+  statistics cancellation, and repeated transient editor/settings-dialog destruction. Keep this guide synchronized with
   verified upstream schema changes rather than treating current field lists as permanent. Start with
   `tests/test_hysteria2_compatibility.py`, `tests/test_native_tun_semantics.py`, and
   `tests/test_backend_editor_contract.py`.

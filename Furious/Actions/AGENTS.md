@@ -23,10 +23,15 @@ presentation without becoming a workflow authority.
   transient/repeated receiver uses the weak named-method facilities required by `Furious/Qt/AGENTS.md`.
 - Clipboard text, files, QR images, share links, and plugin results are untrusted and may contain credentials. Bound
   diagnostic excerpts and never log or echo a complete secret-bearing payload merely to explain a parse failure.
-- Long-running capture/import/export presentation owns one cancellable operation context. Screen capture/decoding
-  workers return data for GUI-thread insertion and retain no transient windows. Yield large insertions in bounded
-  batches, reject callbacks after cancellation/destruction, and retain the captured input until terminal cleanup. QR
-  result generation belongs to its window; actions delegate instead of retaining a parallel exporter.
+- Screen capture and QR decoding currently run synchronously; batching the resulting imports does not make capture
+  interruptible. If moved to workers, transfer data through an owned GUI-thread continuation without retaining
+  transient windows. QR export generation belongs to its result window, not a parallel action-owned exporter.
+- Small profile imports use the direct bulk path; large imports yield between bounded batches. Preserve captured
+  input and one operation context until completion/cancellation, reject deferred calls after teardown, and retain
+  already committed batches when cancellation stops later work. A parser call itself is not preempted by a batch.
+- Batch limits bound work between event-loop yields; the minimum progress interval throttles status refreshes at
+  those boundaries. It is not an independent paint timer. Keep terminal feedback accurate and choose scale policies
+  from measured responsiveness rather than freezing a batch count into the command contract.
 - Snapshot the intended profile identities before an asynchronous confirmation or editor opens. On acceptance
   resolve those targets again; do not apply the original gesture to whatever selection happens to exist when the
   dialog closes.

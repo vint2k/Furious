@@ -35,6 +35,7 @@ exceptions; it does not define the source test suite or imply that every package
   gates. When a target cannot run locally, add a narrow CI assertion that fails before publication with a useful reason.
 - The current workflow performs packaging/import/native checks but does not run the unittest behavioral suite. Do
   not call an artifact build a regression-test pass; use `tests/README.md` for source verification. Check actual
-  `needs` and tag gates rather than assuming a downstream publish job runs on every build.
+  `needs` and tag gates rather than assuming a downstream publish job runs on every build. Follow each publication
+  dependency back to its required artifact checks; upload success alone does not establish release eligibility.
 - Revalidate version/architecture claims against the current matrix instead of duplicating all pins here. When build
   topology intentionally changes, update this scope and follow every consumer through upload and publication.

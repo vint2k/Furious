@@ -1,8 +1,7 @@
 # Bundled extension guidance
 
 Inherit the root and package guides; consult Plugins for capability and registration contracts. This scope covers
-host-shipped non-runtime plugins and must not gain
-private authority merely because the code is bundled.
+host-shipped non-runtime plugins and must not gain private authority merely because the code is bundled.
 
 - `Extensions` contains host-shipped plugins that are not proxy runtimes. They register through the same public API
   and lifecycle as entry-point plugins. New extension contracts must be usable without private
@@ -15,7 +14,9 @@ private authority merely because the code is bundled.
   declared result shape, preserve useful names/upstream IDs, and never log a complete payload or link. Current
   standard formats are linear plain/Base64 share-link envelopes; introduce explicit size/depth/work limits before
   adding richer recursive or nested formats. Standard decoders opt into worker execution; that declaration covers
-  all shared parser state and caches, not merely absence of widgets in the immediate method.
+  all shared parser state and caches, not merely absence of widgets in the immediate method. Worker preparation also
+  requires the selected protocol handlers to opt in; a safe envelope decoder cannot authorize an unsafe downstream
+  parser. Preserve the GUI compatibility fallback for unclassified capabilities.
 - Decoder output is descriptive, not a repository transaction. It cannot assign live profile identity, mutate a
   subscription group, cancel tests, reconnect, or publish UI state; those decisions remain at the import/manager commit
   boundaries.

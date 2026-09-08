@@ -22,7 +22,8 @@ Qt presentation, plugin discovery, or workflow execution.
 - Profile ID, object identity, subscription source/key, connection fingerprint, display text, and row position
   answer different questions. Fingerprints cover only the connection document, not user metadata; they require
   deterministic JSON-compatible values and reject non-finite numbers. A metadata edit need not invalidate connection
-  testing.
+  testing. Equal fingerprints do not imply equal profile IDs: independently stored profiles may describe identical
+  connections. Do not merge their metadata, ownership, or selection merely to deduplicate execution work.
 - Subscription membership (`subscriptionSource`) and remote ownership (`subscriptionManaged` plus its matching key)
   are separate. Legacy migration may infer ownership where the flag was absent; current locally grouped profiles
   must remain local. Preserve that distinction through copies, moves, and metadata aliases.

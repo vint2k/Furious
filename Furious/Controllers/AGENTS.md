@@ -1,22 +1,23 @@
 # Controller guidance
 
 Inherit the root and package guides. This scope preserves controllers as process-lifetime authorities for shared
-transitions, not owners of execution resources or presentation objects.
+transitions. Services own execution resources; existing prompts are presentation compatibility paths.
 
 ## Shared state authorities
 
 - Controllers own process-lifetime shared state and transition policy. They coordinate injected repositories/services
-  and publish structured Qt signals; they do not own transient widgets, network replies, core processes, or worker pools.
+  and publish structured Qt signals. New behavior delegates presentation and execution resources to their owners;
+  existing host-setting prompts do not justify moving network replies, core processes, or pools into controllers.
 - `ConnectionController` is the sole connection state machine. A GUI start remains `Connecting` while one
-  generation- checked `ConnectionManager` transaction acquires readiness/TUN resources. The selected live profile is
+  generation-checked `ConnectionManager` transaction acquires readiness/TUN resources. The selected live profile is
   exposed during `Connecting`; successful runtime commit precedes System Proxy setup and `Connected`. Failure resets
   the active profile. Disconnect/reconnect cancels the exact in-flight generation and ignores stale completion.
 - Preserve state and signal ordering, interaction gating, the exact selected `ServerProfile`, runtime snapshots,
   reconnect preference, and rollback after validation, runtime, TUN, System Proxy, cancellation, or unexpected-exit
   failure. Worker/native callbacks cross to the controller’s Qt thread before transition.
-- A startup completion must belong to the current controller generation before it can change state, active profile,
-  System Proxy, or interaction gating. Typed runtime failures keep their semantic reason; cancellation and supersession
-  are not rewritten as generic connection errors.
+- The active live profile is not the prepared document used by an already-started runtime. Resolve identity and
+  generation before changing state or host effects, and preserve typed runtime failures; cancellation and supersession
+  are not generic connection errors.
 - `RoutingController` owns available capability options plus selected/persisted routing. Distinguish a newly
   selected repository profile from the active-profile reference and the independent runtime document; changes use
   controlled reconnect, not mutation of the running document. User-defined routing labels are semantic data, not

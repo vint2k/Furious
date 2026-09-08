@@ -24,7 +24,8 @@ satisfy without importing application composition or concrete backends.
   construction deliberately captures diagnostics; do not impose one blanket exception convention on those different
   contracts.
 - Runtime liveness is observational: querying it must not consume an exit, transfer ownership, or dispatch
-  callbacks. Keep semantic startup errors separate from raw process codes and readiness timeouts.
+  callbacks. A zero process exit can still be an unexpected connection failure; requested stop and raw exit success
+  are different facts. Keep semantic startup errors separate from process codes and readiness timeouts.
 - Verify cheap/import-independent contracts plus representative runtime, storage, editor, application-exit,
   encoding, and configuration implementations. Update this guide when a contract intentionally changes, together
   with all implementers and compatibility tests. Start with `tests/test_interface.py` and

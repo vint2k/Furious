@@ -38,7 +38,9 @@ domain, persistence, orchestration, platform integration, and presentation; nest
 - Controllers publish shared state and coordinate resource-owning services. New service APIs publish outcomes for UI
   consumers rather than create presentation. Existing update-service dialogs and settings/controller prompts are
   compatibility paths, not evidence of a strict UI-free service/controller layer; preserve callers until
-  deliberately separating those responsibilities. Widgets should not absorb new workflow orchestration.
+  deliberately separating those responsibilities. Some shared managers are currently constructed under persistent
+  widgets/pages. Construction location does not transfer workflow authority to every view: moving an owner must
+  preserve one scheduler, result boundary, and cleanup path. Widgets should not absorb new workflow orchestration.
 - Plugin registries index process-lifetime plugins, descriptors, and capabilities. Created editors and active
   runtimes transfer to explicit UI/workflow owners. A capability may own a reusable service, such as asset updating,
   but that service still needs a cleanup boundary. Built-ins use the public capability contract; existing

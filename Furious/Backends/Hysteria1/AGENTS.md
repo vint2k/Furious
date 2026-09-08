@@ -1,21 +1,18 @@
 # Hysteria 1 guidance
 
 Inherit the root, package, and common backend guides; consult Plugins for capability contracts. This scope exists to
-preserve Hysteria 1's legacy flat schema and lifecycle
-without importing assumptions from Hysteria 2.
+preserve Hysteria 1's legacy flat schema and lifecycle without importing assumptions from Hysteria 2.
 
 - Hysteria 1 is the legacy flat client schema and `hysteria://` share-link backend. Do not import Hysteria 2 nested
   documents, obfuscation, statistics, realm, or native-TUN semantics merely because the upstream names are related.
-- Preserve tolerated legacy types, upstream field names, absent defaults, and unknown combo values. Loading and an
-  untouched editor/URI/mapping round trip are observational; explicit user edits may normalize only the represented
-  field.
+- Preserve tolerated legacy types, upstream field names, absent defaults, and unknown combo values through mapping
+  and untouched-editor round trips. URI round trips cover supported share-link fields only. Explicit user edits may
+  normalize the represented field; runtime validation may reject values that observational loading must preserve.
 - Subscription import is allowed only through supported Hysteria 1 protocol handlers. Subscription identity and test
   metadata stay in `ServerProfile`, and validation diagnostics never disclose passwords or complete links.
 - Runtime and download-test preparation use independent configuration copies. This backend uses application tun2socks
   when global TUN requires it and owns the MMDB/ACL inputs used by its routing launch; it does not gain native TUN by
   falling through another backend’s policy.
-- Treat tolerated legacy values as input compatibility, not as permission to rewrite the persisted document during
-  inspection. Runtime validation may reject what observational editor loading must still preserve.
 - Routing ACL/MMDB launch inputs remain distinct from the stored connection JSON. A prepared runtime advertises its
   local HTTP readiness endpoint separately from child liveness. The built-in factory has no statistics provider;
   shared UI must handle that absence instead of treating it as a failed connection.

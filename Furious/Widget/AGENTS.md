@@ -1,8 +1,8 @@
 # Reusable widget guidance
 
 Inherit the root and package guides; consult `Furious/Qt/AGENTS.md` for shared lifetime/presentation contracts. This
-scope covers reusable controls and model/view adapters below page
-composition; it does not own application workflows.
+scope covers reusable controls and model/view adapters below page composition. Persistent widgets currently host
+some service owners; that construction detail does not make every view an independent workflow authority.
 
 ## Presentation and identity
 
@@ -29,6 +29,11 @@ composition; it does not own application workflows.
 - Model notifications describe the real source mutation. Structural replacement may legitimately use a model reset;
   metadata-only test results should update the exact cell. Do not use resets/full repaints to mask broken mapping or
   missing identity restoration. Test selected identities and the current keyboard index independently.
+- Bulk profile mutations validate/prepare a batch before beginning structural notifications. Resolve captured IDs
+  again after confirmation and between deferred batches, report actual source ranges, and preserve activation before
+  observers see completed removal. Forward bulk insert/delete operations through the model instead of replaying a
+  single-item notification/reconciliation path for every profile. Small direct operations and deferred large ones
+  share these identity rules; batch yields and throttled progress updates serve different responsiveness purposes.
 - Endpoint lookup belongs to `EndpointInfoService`; the map renders validated results and has a no-WebEngine
   fallback. Optional WebEngine import failure must not prevent importing the widget/package, and hidden presentation
   must not retarget a queued lookup.

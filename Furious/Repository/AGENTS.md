@@ -19,6 +19,8 @@ This scope owns restoration, migration, ordering, and persistence; workflows and
 - Distinguish a live-collection commit from serialization/flush and subsequent controller effects. The compatibility
   collection can change before it is flushed; a successful in-memory synchronization is not proof of an atomic disk
   transaction. Preserve explicit flush/cleanup behavior and report failures at the boundary that actually failed.
+  Batched UI commands may commit several live mutations; cancellation prevents later batches without restoring
+  already committed ones. Do not impose whole-command atomicity without changing callers and failure semantics.
 - Moving a profile between subscription displays does not automatically make it remotely managed; preserve the explicit
   distinction between local membership and synchronization ownership.
 - Verify legacy/current/unknown-field round trips, malformed roots, restore-failure preservation, ordering/stable

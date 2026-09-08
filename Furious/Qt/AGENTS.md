@@ -9,7 +9,8 @@ primitives; pages and services consume them without creating parallel registries
 ## Canonical presentation
 
 - Reuse `Furious.Qt` `AppQ*` controls, `AppStyleSheet`, translation/theme mixins, and shared dialog/window infrastructure.
-  Do not create parallel style, theme-transition, translation, or lifetime registries.
+  Do not create parallel style, theme-transition, translation, or lifetime registries. Shared control styling belongs
+  in the application stylesheets; component-specific overrides are valid parts of stylesheet composition.
 - Controls that retranslate retain source text; semantic/user-defined values stay untranslated. Preserve keyboard focus,
   shortcut scope, accessibility, translated-text growth, responsive layout, high-DPI behavior, and both themes.
 - Application-owned theme transitions commit destination state immediately; snapshots are non-interactive presentation
@@ -55,9 +56,13 @@ primitives; pages and services consume them without creating parallel registries
 - Top-level windows use canonical first-show preparation. Save geometry/state only after a native presentation; a
   never-shown Qt fallback must not overwrite persisted user geometry. Do not call overridable geometry hooks from
   constructors or manipulate private first-show state.
+- A stylesheet border radius paints a rounded frame but does not clip child viewports or table headers. Padding
+  can protect the corners while introducing a visible inset; assess both effects before changing shared view styles.
+  Popup native-window transparency is a separate boundary from in-window child painting.
 - When behavior depends on focus, selection, proxy mapping, modifiers, shortcuts, queued delivery, animation, geometry,
-  or destruction, construct real widgets and use `QTest` plus the real event loop. Test semantic state and lifecycle,
-  not private coordinates or pixel-perfect screenshots.
+  or destruction, use real widgets, `QTest`, and the event loop. Prefer semantic assertions; for rendering defects,
+  test the affected border/background/alpha behavior under explicit themes and scale factors instead of relying on
+  selector counts or whole-window pixel equality.
 - For lifetime-sensitive changes, repeat open/close/accept/reject paths and assert destroyed signals, weak wrappers,
   registries, timers, callbacks, replies, threads, handles, and child counts return to baseline. Run a
   representative Nuitka probe when compiled callback retention or packaged-only behavior is part of the defect.

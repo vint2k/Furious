@@ -17,9 +17,9 @@ general-purpose utility bucket.
 - Shared crash status is a synchronized Boolean plus the child's semantic exit result; diagnostic text is written to
   a file and may include retained logs plus a traceback. Do not describe the complete crash file as size-bounded by
   the Boolean channel. Redaction and crash-write failure are separate from application-exit correctness.
-- Fallback presentation runs in the parent after a nonzero child result and does not rerun normal application
-  startup. Preserve the original result when evolving error-reporting failures rather than adding another
-  supervisor.
+- Fallback presentation runs in the parent after a nonzero child result. It constructs a Qt application for the
+  report but does not call the ordinary application `run()` initialization. Keep that constructor dependency in
+  failure-path tests, and preserve the original result when evolving reporting failures rather than adding a supervisor.
 - Verify normal return, exception, assertion, signal, pre-application failure, crash-log failure, command dispatch,
   cross-platform spawn, exact child joining, and absence of manager servers or orphaned resources. If this process
   topology changes intentionally, rewrite this guide rather than layering another supervisor over the old one.

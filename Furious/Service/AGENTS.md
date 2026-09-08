@@ -10,12 +10,14 @@ for lifetime primitives. This scope owns multi-stage workflows and temporary res
   still creates update dialogs as a compatibility path; preserve its public behavior until presentation is
   deliberately moved to a UI owner.
 - Give each QObject service, worker, reply, timer, pool, thread, runtime, process, cache, and callback context one durable
-  owner and bounded idempotent cleanup. Construct Qt services only after an application exists.
+  owner and explicit idempotent cleanup. Cancellation can suppress a result without stopping the underlying work;
+  distinguish deadline-bounded teardown from cooperative drains, and retain resources until their users finish.
+  Construct Qt services only after an application exists.
 - Inject repositories/providers/clients/runtime factories where practical. Stage results, prove freshness, and commit
   through the owning repository/controller rather than creating a parallel authoritative collection.
 - Every async workflow defines supersession and one terminal path. Generation/version or exact target identity rejects
-  stale completion; terminal cleanup aborts/finishes once, deletes replies/Qt objects in their owning thread, and cannot
-  retain a shut-down manager.
+  stale completion. Terminal cleanup runs once and deletes replies/Qt objects in their owning thread. Release callback
+  contexts when execution no longer needs them; late delivery must not revive a shut-down manager or mutate live state.
 
 ## Connection and network workflows
 
@@ -39,9 +41,9 @@ for lifetime primitives. This scope owns multi-stage workflows and temporary res
   unclassified plugin parsers stay on the GUI compatibility path. The manager's synchronous shutdown closes
   admission, cancels work, and retains the pool/relay until workers finish. A slow-shutdown warning is diagnostic,
   not a deadline that permits destroying running workers; a non-returning plugin can still block shutdown.
-  Workers never read live repositories or Qt models;
-  the GUI thread verifies the full source signature and group revision, commits while preserving live profile
-  identity/local metadata, then publishes coalesced status/structure. Post-commit reconnect/test invalidation
+  Workers never read live repositories or Qt models. The GUI thread verifies the full source signature and group
+  revision, commits while preserving live profile identity/local metadata, then publishes coalesced status/structure.
+  Post-commit reconnect/test invalidation
   failure is reported without undoing the committed profiles. Here commit means live reconciliation; repository
   flush and status persistence are separate boundaries, not one disk transaction.
 - Provider-reported subscription usage/expiry metadata is untrusted advisory input. Parse it with strict bounds at the

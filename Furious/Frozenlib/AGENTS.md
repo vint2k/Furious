@@ -26,8 +26,9 @@ for unrelated application orchestration to accumulate in a broad helper namespac
   responsiveness review.
 - Own exact native threads/processes/handles and clear stale daemon references. Externally keyed caches are bounded and
   no cache/weak pool captures QObject instances or bound methods accidentally.
-- `CleanupOnExit` and translation/theme/connection pools are registries, not owners. Their legacy de-duplication behavior
-  is a compatibility constraint; resource-owning repeated instances need an explicit owner/cleanup stage.
+- `CleanupOnExit` and translation/theme/connection pools are weak registries, not owners. Cleanup normally
+  de-duplicates by type; repeated instances with separate resources require per-instance cleanup registration or an
+  explicit containing cleanup stage. Registry membership neither retains a wrapper nor proves every instance drained.
 - `AppResources.py` is generated from `Resources.qrc` and referenced assets. Change the manifest/input files and
   regenerate with the compatible PySide6 resource compiler; never hand-edit generated resource code.
 - Verify every affected OS branch with mocked host calls, plus persistence-on-failure, bounded cleanup, import-time

@@ -1,8 +1,7 @@
 # Xray guidance
 
 Inherit the root, package, and common backend guides; consult Plugins for capability contracts. This scope owns Xray's
-full JSON preservation, routing/assets/statistics,
-and protocol/transport/TLS projections.
+full JSON preservation, routing/assets/statistics, and protocol/transport/TLS projections.
 
 ## Full-document preservation
 
@@ -23,8 +22,8 @@ and protocol/transport/TLS projections.
   malformed TUN and suppresses tun2socks. Proxy/download preparation replaces inbounds with its test surface. Verify
   the prepared document rather than assuming `proxyModeOnly` alone removes user TUN from every factory input.
 - Xray owns routing profiles/options, geo assets, API statistics, and the `XRAY_LOCATION_ASSET` environment contract.
-  Asset replacement remains digest-verified and atomic; action providers retain reusable routing/asset windows only
-  through the created action owner and create transient settings dialogs per request.
+  Action providers retain reusable routing/asset windows through the created action owner and create transient
+  settings dialogs per request; the capability registry does not become a transient-window owner.
 - Runtime asset updates stage bytes and digest verification before atomic replacement. Failure preserves the prior
   usable file. Distinguish this updater from `Deploy.py --download`, whose download/integrity behavior must be
   inspected separately; shared filenames do not make the two mechanisms equivalent.

@@ -11,12 +11,13 @@ human-reviewed translations.
   extraction/update. It rebuilds source membership, drops stale keys, preserves reviewed target text, and reports
   collisions. Automatic translation is currently disabled: unresolved/unreviewed target values may be replaced with
   the source text. Review the diff before treating the command as a harmless refresh, especially with `--ignore`.
-- Existing dictionary order is generally preserved; the generator does not enforce a universal field order and
-  source traversal can affect newly discovered entries. Keep diffs stable without claiming canonical sorting.
+- Preserve existing translation-key and language-field order. The generator retains dictionary order rather than
+  enforcing a universal sort; source traversal can affect newly discovered entries. Do not sort the catalog as cleanup.
   `source` contains deduplicated fully qualified modules and is rebuilt by extraction rather than manually curated.
 - Inspect the full diff. Preserve deliberate translations/review flags, HTML/newline semantics, and natural RU/ZH
-  meaning; mark an entry reviewed only after a human has verified it. Do not hand-maintain the generated `source` module
-  list.
+  meaning. Curated, verified translations need `isReviewed` set to the string `'True'`, as the generator compares that
+  literal; a Python Boolean is not equivalent. Review applies to the entry, so inspect its other language values too.
+  Do not clear approved review flags or hand-maintain the generated `source` module list.
 
 ## Extractable source text
 

@@ -1,8 +1,7 @@
 # External Core guidance
 
 Inherit the root, package, and common backend guides; consult Plugins for capability contracts. This file preserves
-the intentionally different direct-subprocess scope for
-user-selected executables.
+the intentionally different direct-subprocess scope for user-selected executables.
 
 ## Structured executable boundary
 
@@ -27,7 +26,8 @@ user-selected executables.
 - This is a mapping-only protocol: its explicit type discriminator selects local executable configuration, it
   declares no URI schemes, and portable URI/QR export may return no result. Shared import/export UI must preserve
   that capability absence. Endpoint readiness checks the configured proxy; it does not validate an arbitrary
-  executable's remote service.
+  executable's remote service. Endpoint metadata does not configure the executable or cause it to open a listener;
+  users remain responsible for matching that metadata to the executable's own configuration.
 - Verify unknown-field and editor round trips, path/argument/environment validation, paths with spaces,
   immediate-exit failure, complete and partial output, exact callback/reader/watcher cleanup, repeated stop/dispose,
   TUN opt-in and remote-address handling, subscription rejection, and transient editor destruction. Update this

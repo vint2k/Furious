@@ -15,6 +15,8 @@ and test-tier selection; test convenience never weakens a production invariant.
   hermetic child, temporary settings, disabled singleton/tray/restoration, and mocked host mutation.
 - Import order is part of isolation: select the offscreen Qt platform and temporary settings identity before importing
   modules that can create Qt/application globals. A late patch is not equivalent to preventing the side effect.
+  A temporary QSettings namespace does not reset already-cached `Storage` collections: explicitly isolate and restore
+  live repository fixtures as well as persisted settings, especially when exercising cleanup or partial startup.
 
 ## Test the contract
 
@@ -28,6 +30,8 @@ and test-tier selection; test convenience never weakens a production invariant.
   duplicate endpoints, bounded scheduling, and unrelated-work preservation rather than relying on row positions.
 - Qt behavior involving focus, selection, proxy mapping, shortcuts, queued delivery, geometry, animation, or destruction
   uses real widgets and `QTest`. Localized-text tests choose an explicit language inside `isolatedSettings()`.
+  Rendering regressions may assert targeted pixel/alpha or geometry properties under explicit themes and scaling.
+  Stylesheet selector counts are not rendering invariants: shared rules and component overrides can both be valid.
 - Prefer exact state, signal counts, destroyed signals, weak references, registry/child counts, thread/process/handle
   ownership, and final exit status. RSS/handle trends and repeated lifecycle batches belong in stress tiers;
   `gc.collect()` is diagnostic at batch boundaries, never a production fix or per-cycle requirement.
@@ -41,8 +45,9 @@ and test-tier selection; test convenience never weakens a production invariant.
 - Source-only tests and an offscreen platform do not prove a packaged Qt runtime. Compiler-sensitive changes need
   the relevant native lifecycle module and a separate compiled probe; report skipped or unavailable targets
   explicitly. The release workflow currently builds/checks artifacts without running this source behavioral suite.
-- Benchmarks report scale and latency but are not correctness gates. Keep deterministic scale assertions in normal or
-  stress tests and avoid machine-dependent elapsed-time thresholds unless the test is explicitly diagnostic.
+- Separate deterministic correctness/scale assertions from performance measurements. Opt-in stress tests may gate
+  relative scaling or resource bounds; document the measured contract and environment rather than treating one
+  machine's absolute timing as a portable product requirement.
 - Update `tests/README.md` when coverage ownership, modules, commands, tiers, opt-ins, or environment requirements change.
   The final unittest status and process exit code are authoritative even when negative paths intentionally log errors.
 - Review new tests for production-state mutation, live network dependence, process-name cleanup, unbounded waits,

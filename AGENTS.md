@@ -48,7 +48,8 @@
   controllers/models; they do not copy connection, routing, System Proxy, TUN, subscription, or test state.
 - Treat persisted profiles and plugin documents as input. Prepare runtime, routing, probe, and TUN state on explicit
   copies unless an API deliberately mutates storage. A failed pre-commit stage leaves persistence unchanged; a failed
-  post-commit side effect is reported without pretending the commit rolled back.
+  post-commit side effect is reported without pretending the commit rolled back. Identify the unit of commit:
+  cancellation of a batched operation may preserve completed batches rather than roll back the entire command.
 - Use stable domain identity, not table rows, proxy indexes, display text, or object position. Async results additionally
   prove that the target generation/fingerprint is still current before mutation.
 - Distinguish profile identity, subscription membership, remote synchronization ownership, and execution snapshots.
@@ -98,8 +99,8 @@
   source suite does not prove native distributions or every declared Python/Qt floor. Release import checks do not
   replace behavioral tests; record untested targets and compatibility gaps explicitly.
 - Use real Qt semantics when focus, selection, keyboard modifiers, proxy mapping, event delivery, queued callbacks,
-  geometry, or QObject destruction matters. Prefer semantic state and destroyed/resource counts over pixel snapshots or
-  arbitrary sleeps/RSS thresholds.
+  geometry, or QObject destruction matters. Prefer semantic state and destroyed/resource counts; use targeted
+  rendering assertions when pixels are the defect, without relying on whole-window snapshots or arbitrary sleeps.
 - Before handoff, review for duplicate authorities, persisted-data mutation during preparation, stale async write-back,
   swallowed diagnostics, unowned resources, unbounded external-input caches, plugin-specific branches in shared code,
   and source-only assumptions at packaging boundaries.
@@ -112,11 +113,9 @@
 - Put a rule at the narrowest scope where it helps future decisions; let child guides specialize rather than repeat
   parents. Remove obsolete content inside files, distinguish preferred architecture from compatibility paths, and
   preserve every established file path while doing so.
-- After significant architectural work, ask what durable fact was learned, whether guidance now misleads, and whether a
-  future agent would choose the correct owner and test boundary. Re-read the applicable hierarchy as a fresh agent,
-  challenge rules most likely to become stale or freeze implementation, and do not record temporary implementation
-  details.
-- In each affected scope, distinguish observed behavior from design requirements and identify tests/consumers that
-  can challenge the rule later. Re-read the hierarchy for circular references and rules that freeze incidental
-  structure. During guidance-only work, record code defects separately instead of changing production code to
-  satisfy the prose.
+- After significant architectural work, re-read the applicable hierarchy as a fresh agent: can it identify the
+  owner, invariant, failure boundary, and relevant tests without relying on conversation history? Challenge rules
+  likely to become stale, circular references, and wording that freezes incidental structure.
+- Distinguish observed behavior from design requirements and name tests/consumers that can challenge a local rule.
+  A known limitation is not a desired invariant. During guidance-only work, report code defects separately instead
+  of changing production code to satisfy the prose.

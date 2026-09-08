@@ -1,8 +1,7 @@
 # Backend guidance
 
 Inherit the root and package guides. Consult Plugins/Models/Service for the contracts consumed by this scope. This
-scope adds rules shared by all bundled proxy
-backends without making the richest backend the generic default.
+scope adds rules shared by all bundled proxy backends without making the richest backend the generic default.
 
 ## Common backend contract
 
@@ -13,7 +12,8 @@ backends without making the richest backend the generic default.
   independent runtime copy; failed preparation must not mutate the stored profile.
 - Structured editors are partial projections. Loading is observational except for a narrow documented migration;
   untouched save preserves unknown fields/values and absent defaults. Editing one represented leaf preserves unknown
-  siblings and unrelated branches.
+  siblings and unrelated branches. URI export represents the codec's supported projection, not a lossless backup
+  of every document field; exporting must leave the source document unchanged.
 - Malformed external input returns controlled validation with backend context. Do not create a plausible but different
   profile, and do not log credentials, complete URIs, or documents.
 - Configuration/runtime modules stay importable without constructing Qt editors. Plugin registration remains literal
@@ -28,8 +28,9 @@ backends without making the richest backend the generic default.
 - Supported proxy/download-test preparation explicitly strips native TUN from the copied document. The generic
   `proxyModeOnly` request does not sanitize arbitrary plugin configuration by itself. Required managed-native-TUN
   rejection raises `TUNPreparationError`; do not silently switch implementations.
-- A runtime owns its exact process/thread/readers/monitors and publishes an actionable start error. Stop/dispose is
-  bounded, idempotent, and correct after partial acquisition.
+- A runtime owns its exact process/thread/readers/monitors and publishes an actionable start error. Stop/dispose
+  must be bounded, idempotent, and safe after partial acquisition. Report incomplete reaping explicitly; reaching a
+  deadline or changing logical execution state does not prove that native resources have exited.
 - Runtime factories follow the current plugin contract: fully prepare and return one owned launch whose zero-argument
   start is separate from readiness observation. Do not hide readiness waits, Boolean success channels, or controller
   policy inside a backend runtime.
