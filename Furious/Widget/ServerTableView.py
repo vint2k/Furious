@@ -1454,6 +1454,7 @@ class ServerTableView(
         # Refresh index
         """Refresh all."""
         self.sourceModel.refreshIndexes()
+
         self.sourceModel.emitAllChanged()
 
     def _profileIdsForSourceRows(self, rows) -> list[str]:
@@ -1998,6 +1999,7 @@ class ServerTableView(
         )
         mbox.setText(mbox.customText())
         mbox.setColumnMinWidth()
+
         mbox.open()
 
     def appendNewItemByFactory(self, factory: CoreConfiguration | ServerProfile):

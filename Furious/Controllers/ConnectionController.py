@@ -397,6 +397,7 @@ class ConnectionController(QtCore.QObject):
             )
 
         self._finishConnecting()
+
         self.notificationRequested.emit(
             f'{configuration.coreName()}: ' + _('Connected')
         )
@@ -419,6 +420,7 @@ class ConnectionController(QtCore.QObject):
             return
 
         self._startOperation = None
+
         self._emitRuntimesChanged()
 
         while not self._actionQueue.empty():
@@ -443,6 +445,7 @@ class ConnectionController(QtCore.QObject):
             return
 
         self._startOperation = None
+
         self._emitRuntimesChanged()
 
         configuration = self.activeProfile
@@ -461,6 +464,7 @@ class ConnectionController(QtCore.QObject):
             return
 
         self._startOperation = None
+
         self._emitRuntimesChanged()
 
         self._reset()

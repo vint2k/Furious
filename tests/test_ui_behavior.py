@@ -1654,6 +1654,7 @@ class UnifiedLogPageTest(unittest.TestCase):
 
             page.searchLineEdit.setText('[literal')
             self.assertRendered(page)
+
             self.assertEqual(page.plainText(), 'application beta [literal]')
             self.assertTrue(page.searchLineEdit.toolTip())
 
@@ -1667,8 +1668,10 @@ class UnifiedLogPageTest(unittest.TestCase):
 
             clearButton = page.searchLineEdit.findChild(QToolButton)
             self.assertIsNotNone(clearButton)
+
             QTest.mouseClick(clearButton, QtCore.Qt.MouseButton.LeftButton)
             self.assertRendered(page)
+
             self.assertEqual(page.searchLineEdit.text(), '')
             self.assertFalse(page.searchLineEdit.toolTip())
             self.assertEqual(
@@ -1692,24 +1695,30 @@ class UnifiedLogPageTest(unittest.TestCase):
             manager = LogManager(maximumEntries=5)
             page = LogPage(manager=manager)
             self.addCleanup(self.disposePage, page)
+
             page.show()
             self.assertRendered(page)
+
             self.assertFalse(page.emptyState.isVisible())
 
             manager.append('application one', APPLICATION_LOG_CATEGORY)
             self.assertRendered(page)
+
             page.filterComboBox.setCurrentIndex(
                 page.filterComboBox.findData(CORE_LOG_CATEGORY)
             )
             self.assertRendered(page)
+
             self.assertTrue(page.emptyState.isVisible())
 
             manager.append('core one', CORE_LOG_CATEGORY)
             self.assertRendered(page)
+
             self.assertFalse(page.emptyState.isVisible())
 
             page.searchLineEdit.setText('[missing')
             self.assertRendered(page)
+
             self.assertTrue(page.emptyState.isVisible())
             self.assertEqual(page.plainText(), '')
             self.assertTrue(page.searchLineEdit.toolTip())
@@ -1719,15 +1728,18 @@ class UnifiedLogPageTest(unittest.TestCase):
                 QtCore.Qt.MouseButton.LeftButton,
             )
             self.assertRendered(page)
+
             self.assertFalse(page.emptyState.isVisible())
             self.assertEqual(page.searchLineEdit.text(), '')
             self.assertFalse(page.searchLineEdit.toolTip())
             self.assertEqual(page.filterComboBox.currentData(), CORE_LOG_CATEGORY)
             self.assertEqual(page.plainText(), 'core one')
             self.assertTrue(page.searchLineEdit.hasFocus())
+
             page.filterComboBox.setFocus()
             QTest.keyClick(page.filterComboBox, QtCore.Qt.Key.Key_Home)
             self.assertRendered(page)
+
             self.assertEqual(page.filterComboBox.currentData(), ALL_LOGS_FILTER)
             self.assertEqual(
                 AppSettings.get('LogViewerSelectedCategory'), ALL_LOGS_FILTER
@@ -1742,23 +1754,29 @@ class UnifiedLogPageTest(unittest.TestCase):
             manager = LogManager(maximumEntries=2)
             page = LogPage(manager=manager)
             self.addCleanup(self.disposePage, page)
+
             manager.append('match first')
             page.searchLineEdit.setText('match')
+
             page.show()
             self.assertRendered(page)
+
             self.assertFalse(page.emptyState.isVisible())
 
             manager.append('other one')
             manager.append('other two')
             self.assertRendered(page)
+
             self.assertTrue(page.emptyState.isVisible())
             self.assertEqual(page.plainText(), '')
 
             page.hide()
             manager.append('match live')
             processQtEvents()
+
             page.show()
             self.assertRendered(page)
+
             self.assertFalse(page.emptyState.isVisible())
             self.assertEqual(page.plainText(), 'match live')
 

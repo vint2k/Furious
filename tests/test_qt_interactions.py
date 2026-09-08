@@ -1008,12 +1008,14 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
             routing = _RoutingControllerFixture(
                 (RoutingOption('default', 'Default'),), 'default'
             )
+
             imported = []
             action = AppQAction(
                 'Fixture import',
                 callback=lambda: imported.append(True),
                 translatable=False,
             )
+
             try:
                 with self._home(
                     settings, connection, routing, importActions=(action,)
@@ -1022,54 +1024,71 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                     home.show()
                     home.activateWindow()
                     processQtEvents()
+
                     self.assertTrue(home.emptyState.isVisible())
                     self.assertIn('No profiles yet', home.emptyStateLabel.text())
                     self.assertIs(home.importMenu.actions()[0], action)
                     self.assertIn(
                         action, home.userServersQTableWidget.contextMenu.actions()
                     )
+
                     QTest.mouseClick(home.importButton, QtCore.Qt.LeftButton)
                     processQtEvents()
+
                     QTest.keyClick(home.importMenu, QtCore.Qt.Key_Down)
                     QTest.keyClick(home.importMenu, QtCore.Qt.Key_Return)
                     processQtEvents()
+
                     self.assertEqual(imported, [True])
+
                     profile = ServerTableQtInteractionTest._profile('alpha')
                     home.userServersQTableWidget.appendNewItemByFactory(profile)
                     processQtEvents()
+
                     self.assertFalse(home.emptyState.isVisible())
+
                     home.searchLineEdit.setFocus()
                     QTest.keyClicks(home.searchLineEdit, 'missing')
                     QTest.keyClick(home.searchLineEdit, QtCore.Qt.Key_Return)
                     processQtEvents()
+
                     self.assertTrue(home.emptyState.isVisible())
+
                     QTest.mouseClick(
                         home.searchLineEdit.findChild(QToolButton), QtCore.Qt.LeftButton
                     )
                     processQtEvents()
+
                     self.assertFalse(home.emptyState.isVisible())
                     self.assertTrue(home.searchLineEdit.hasFocus())
                     self.assertEqual(home.searchLineEdit.text(), '')
                     self.assertIs(Storage.UserServers()[0], profile)
+
                     home.subscriptionFilterComboBox.addItem(
                         'Empty group', 'missing-group'
                     )
                     home.subscriptionFilterComboBox.setCurrentIndex(2)
                     processQtEvents()
+
                     self.assertTrue(home.emptyState.isVisible())
+
                     home.subscriptionFilterComboBox.setFocus()
                     QTest.keyClick(home.subscriptionFilterComboBox, QtCore.Qt.Key_Home)
                     processQtEvents()
+
                     self.assertEqual(home.subscriptionFilterComboBox.currentIndex(), 0)
                     self.assertEqual(
                         home.userServersQTableWidget.proxyModel.rowCount(), 1
                     )
+
                     for testAction in home.userServersQTableWidget.testActions:
                         self.assertIn(
                             testAction,
                             home.userServersQTableWidget.contextMenu.actions(),
                         )
+
                     manager = home.userServersQTableWidget.profileTestManager
+
                     with mock.patch.object(
                         manager._latencyScheduler, 'cancelAll'
                     ) as cancel:
@@ -1080,11 +1099,14 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                         menu.setActiveAction(table.testActions[-1])
                         QTest.keyClick(menu, QtCore.Qt.Key_Return)
                         processQtEvents()
+
                     cancel.assert_called_once_with()
+
                     home.userServersQTableWidget.deleteItemByIndex(
                         [0], showTrayMessage=False, showProgress=False
                     )
                     processQtEvents()
+
                     self.assertTrue(home.emptyState.isVisible())
                     self.assertIn('No profiles yet', home.emptyStateLabel.text())
             finally:

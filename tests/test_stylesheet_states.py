@@ -88,12 +88,14 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
         """Keep embedded buttons centered, theme-correct and bounded after restyling."""
         app = application()
         originalStyleSheet = app.styleSheet()
+
         edit = AppQLineEdit()
         edit.setClearButtonEnabled(True)
         edit.resize(340, 36)
         edit.show()
         edit.activateWindow()
         edit.setFocus()
+
         try:
             for theme in (AppStyleSheet.Light, AppStyleSheet.Dark) * 3:
                 for direction in (QtCore.Qt.LeftToRight, QtCore.Qt.RightToLeft):
@@ -101,9 +103,12 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                         edit.setLayoutDirection(direction)
                         edit.setText('example search')
                         edit.setSelection(0, 7)
+
                         app.setStyleSheet(AppStyleSheet.forTheme(theme))
                         processQtEvents()
+
                         self.assertEqual(edit.selectedText(), 'example')
+
                         buttons = edit.findChildren(QToolButton)
                         self.assertEqual(len(buttons), 1)
                         button = buttons[0]
@@ -115,6 +120,7 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                             ),
                             1,
                         )
+
                         self.assertFalse(button.icon().isNull())
                         pixmap = button.icon().pixmap(16, 16).toImage()
                         colors = [
@@ -123,6 +129,7 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                             for y in range(pixmap.height())
                             if pixmap.pixelColor(x, y).alpha() > 128
                         ]
+
                         self.assertTrue(colors)
                         self.assertTrue(
                             all(
@@ -131,25 +138,32 @@ class StyleSheetStateRenderingTest(unittest.TestCase):
                                 for color in colors
                             )
                         )
+
                         QTest.mouseClick(button, QtCore.Qt.LeftButton)
+
                         self.assertEqual(edit.text(), '')
                         self.assertTrue(edit.hasFocus())
                         self.assertTrue(waitFor(lambda: not button.isVisible()))
+
             edit.setText('read only')
             edit.setReadOnly(True)
             app.setStyleSheet(AppStyleSheet.forTheme(AppStyleSheet.Light))
             processQtEvents()
+
             self.assertEqual(edit.text(), 'read only')
             self.assertFalse(edit.findChild(QToolButton).isEnabled())
+
             app.setStyleSheet(AppStyleSheet.forTheme(AppStyleSheet.Dark))
             edit.setClearButtonEnabled(False)
             processQtEvents()
+
             self.assertFalse(edit.isClearButtonEnabled())
             self.assertFalse(edit.findChildren(QToolButton))
         finally:
             edit.close()
             edit.deleteLater()
             processQtEvents()
+
             app.setStyleSheet(originalStyleSheet)
 
     def testFlatAndLinkButtonsRetainFocusedOutlineDuringHover(self):

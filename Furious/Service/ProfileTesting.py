@@ -348,6 +348,7 @@ class _LatencyScheduler(QtCore.QObject):
             _LatencyTestJob(ProfileTestTarget.capture(profile), options)
             for profile in profiles
         )
+
         self.scheduleDrain()
 
     def ensureTcpingEngine(self):

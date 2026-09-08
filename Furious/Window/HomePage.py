@@ -654,6 +654,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
             qrCodeWindowFactory=QRCodeWindow,
             importActionsFactory=self.serverImportActions,
         )
+
         pluginRegistry = getPluginRegistry()
 
         # These two settings dialogs intentionally remain parent-owned and are
@@ -693,6 +694,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
 
         if serverActions:
             serverActions.append(AppQSeparator())
+
         serverActions.append(
             AppQAction(
                 _('New Empty Configuration'),
@@ -748,6 +750,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
             self.activateSelectedServerForConnection,
             parent=self,
         )
+
         self.routingSelector = RoutingSelector(parent=self)
 
         self.systemProxyComboBox = AppQComboBox(parent=self)
@@ -780,6 +783,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
         )
 
         self.searchButton = SearchButton()
+
         self.subscriptionFilterComboBox = AppQComboBox()
         self.subscriptionFilterComboBox.setContentWidthAdjustable()
         self.subscriptionFilterComboBox.setMinimumWidth(190)
@@ -817,12 +821,16 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
         self._layout.addLayout(self.headerLayout)
         self._layout.addLayout(self.connectionLayout)
         self._layout.addLayout(self.actionLayout)
+
         self.emptyState = QWidget(parent=self)
         emptyLayout = QHBoxLayout(self.emptyState)
         emptyLayout.setContentsMargins(0, 0, 0, 0)
+
         self.emptyStateLabel = AppQLabel(translatable=False, parent=self.emptyState)
         self.emptyStateLabel.setWordWrap(True)
+
         emptyLayout.addWidget(self.emptyStateLabel, 1)
+
         self._layout.addWidget(self.emptyState)
         self._layout.addWidget(self.userServersQTableWidget, 1)
 
@@ -837,6 +845,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
                 model.layoutChanged,
             ):
                 connectWeakly(signal, self, 'refreshEmptyState', sender=model)
+
         self.refreshEmptyState()
 
         self.searchButton.clicked.connect(
@@ -888,6 +897,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
         """Explain empty storage separately from an empty filtered view."""
         table = self.userServersQTableWidget
         empty = table.proxyModel.rowCount() == 0
+
         self.emptyState.setVisible(empty)
         if empty:
             self.emptyStateLabel.setText(

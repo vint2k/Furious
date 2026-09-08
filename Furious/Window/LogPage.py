@@ -216,6 +216,7 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Fixed,
         )
+
         self._searchRegex = None
 
         self.textBrowser = DraculaTextBrowser(
@@ -292,10 +293,12 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
         self.emptyState = QWidget(parent=self)
         emptyLayout = QHBoxLayout(self.emptyState)
         emptyLayout.setContentsMargins(0, 0, 0, 0)
+
         self.emptyStateLabel = AppQLabel(
             _('No logs match the current filters.'), parent=self.emptyState
         )
         self.emptyStateLabel.setWordWrap(True)
+
         emptyLayout.addWidget(self.emptyStateLabel, 1)
         self.emptyState.hide()
 
@@ -711,6 +714,7 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
             or self._renderedCategoryId != selectedCategoryId
             else self._entryCursor
         )
+
         batch = self.manager.entriesSince(cursor, selectedCategoryId)
 
         if self._searchRegex is not None:
@@ -739,6 +743,7 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
         self._entryCursor = batch.cursor
         self._renderedSequence = batch.cursor.sequence
         self._entriesDirty = False
+
         self.emptyState.setVisible(
             not self._renderedEntries
             and (self._searchRegex is not None or selectedCategoryId != ALL_LOGS_FILTER)

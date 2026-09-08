@@ -501,6 +501,7 @@ class SubscriptionManager(HttpGetManager):
         )
 
         self._preparationJobs[jobId] = job
+
         self._preparationPool.start(job)
 
         return jobId
@@ -681,6 +682,7 @@ class SubscriptionManager(HttpGetManager):
         self.subscriptionCommitted.emit(context['unique'])
 
         self._recordGroupSuccess(committed, result)
+
         self.subscriptionStateChanged.emit((context['unique'],))
 
         self._finishOperation(committed, successful=committed, structural=True)
@@ -696,6 +698,7 @@ class SubscriptionManager(HttpGetManager):
 
         if self._isCurrentRequest(context):
             self._recordGroupFailure(failed)
+
             self.subscriptionStateChanged.emit((context.get('unique', ''),))
 
         self._finishOperation(context, failed=failed)
