@@ -258,6 +258,7 @@ class ServerTableQtInteractionTest(unittest.TestCase):
                 """Assert one semantic color invalidation and resulting paint."""
                 connectionController.state = state
                 isAdmin.return_value = admin
+
                 sourceSpy = QSignalSpy(table.sourceModel.dataChanged)
                 proxySpy = QSignalSpy(table.proxyModel.dataChanged)
                 paintCounter.count = 0
@@ -300,12 +301,14 @@ class ServerTableQtInteractionTest(unittest.TestCase):
                     tuple(int(role) for role in sourceArguments[2]),
                     expectedRoles,
                 )
+
                 self.assertEqual(proxyArguments[0].row(), proxyIndex.row())
                 self.assertEqual(proxyArguments[1].row(), proxyIndex.row())
                 self.assertEqual(
                     tuple(int(role) for role in proxyArguments[2]),
                     expectedRoles,
                 )
+
                 self.assertEqual(
                     table.sourceModel.data(
                         sourceIndex,

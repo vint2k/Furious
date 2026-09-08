@@ -892,6 +892,7 @@ class QRCodeWindowBehaviorTest(unittest.TestCase):
             '',
             'socks://three.example:1080#Three',
         )
+
         window.show()
         processQtEvents()
 
@@ -901,6 +902,7 @@ class QRCodeWindowBehaviorTest(unittest.TestCase):
 
         self.assertEqual(window.tabWidget.tabToolTip(0), '1 - Profile 1')
         self.assertEqual(window.tabWidget.tabToolTip(1), '3 - Profile 3')
+
         firstPage = window.tabWidget.widget(0)
         firstPageReference = weakref.ref(firstPage)
         firstPageDestroyed = []

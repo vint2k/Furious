@@ -476,16 +476,19 @@ class SubscriptionManagerTest(TestCase):
         manager._synchronizeProfiles = mock.Mock(
             side_effect=(RuntimeError('injected failure'), committed)
         )
+
         completed = []
         committedSubscriptions = []
         stateChanges = []
         structuralChanges = []
+
         manager.updateCompleted.connect(completed.append)
         manager.subscriptionCommitted.connect(committedSubscriptions.append)
         manager.subscriptionStateChanged.connect(
             lambda uniques: stateChanges.append(tuple(uniques))
         )
         manager.subscriptionsChanged.connect(lambda: structuralChanges.append(True))
+
         failed = {'unique': 'group-a', 'profiles': ()}
         successful = {'unique': 'group-b', 'profiles': ()}
 
@@ -1058,6 +1061,7 @@ class SubscriptionManagerTest(TestCase):
         groupATimer = manager._autoUpdateTimers['group-a']
         groupBTimer = manager._autoUpdateTimers['group-b']
         groupBTimerId = groupBTimer.timerId()
+
         groupAReply = _AbortableReply()
         groupBReply = _AbortableReply()
         destroyed = []
@@ -1068,6 +1072,7 @@ class SubscriptionManagerTest(TestCase):
         manager._replySubscriptions.update(
             {groupAReply: 'group-a', groupBReply: 'group-b'}
         )
+
         subscriptions.pop('group-a')
 
         with mock.patch(

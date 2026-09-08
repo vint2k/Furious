@@ -738,9 +738,11 @@ class EndpointInfoServiceTest(unittest.TestCase):
         )
         self.assertFalse(hasattr(widget.countryRow, 'flagLabel'))
         self.assertFalse(hasattr(widget, 'statusLabel'))
+
         self.assertEqual(widget.bodyLayout.stretch(0), 1)
         self.assertEqual(widget.bodyLayout.stretch(1), 2)
         self.assertGreaterEqual(widget.minimumHeight(), 360)
+
         self.assertIsInstance(widget.mapWidget.webView, QWebEngineView)
         self.assertEqual(widget.mapWidget.webProfile.httpUserAgent(), 'Mozilla/5.0')
         self.assertNotIn('Furious', widget.mapWidget.webProfile.httpUserAgent())
@@ -753,6 +755,7 @@ class EndpointInfoServiceTest(unittest.TestCase):
             widget.mapWidget._lastWebState['fontPointSize'],
             QtGui.QFontInfo(widget.mapWidget.font()).pointSizeF(),
         )
+
         themePalette = AppStyleSheet.paletteForTheme(widget.mapWidget._theme)
         self.assertEqual(
             widget.mapWidget._lastWebState['surfaceColor'],
@@ -770,11 +773,13 @@ class EndpointInfoServiceTest(unittest.TestCase):
             widget.mapWidget._lastWebState['mutedTextColor'],
             themePalette['muted'],
         )
+
         self.assertAlmostEqual(widget.mapWidget._lastWebState['markerLatitude'], 34.05)
         self.assertAlmostEqual(
             widget.mapWidget._lastWebState['markerLongitude'], -118.24
         )
         self.assertTrue(scripts)
+
         self.assertEqual(
             widget.ipv4Row.valueContainer.objectName(),
             'EndpointFieldValueContainer',
@@ -796,6 +801,7 @@ class EndpointInfoServiceTest(unittest.TestCase):
             QtCore.Qt.ScrollPhase.ScrollUpdate,
             False,
         )
+
         QtCore.QCoreApplication.sendEvent(widget.mapWidget.webView, wheelEvent)
 
         self.assertTrue(wheelEvent.isAccepted())
@@ -810,12 +816,14 @@ class EndpointInfoServiceTest(unittest.TestCase):
         self.assertIn("document.documentElement.dataset.theme", mapScript)
         self.assertIn('--endpoint-attribution-background', html)
         self.assertIn('--endpoint-text-muted', html)
+
         self.assertIn('endpoint-loading-overlay', html)
         self.assertIn('endpoint-loading-spinner', html)
         self.assertIn('width: 16px', html)
         self.assertIn('height: 16px', html)
         self.assertIn('0.8s linear infinite', html)
         self.assertIn('border-right-color: transparent', html)
+
         self.assertIn('--endpoint-font-family', html)
         self.assertIn("JSON.stringify(state.fontFamily", mapScript)
         self.assertIn('applyLoadingState()', mapScript)
@@ -823,11 +831,13 @@ class EndpointInfoServiceTest(unittest.TestCase):
         self.assertIn('.maplibregl-canvas:focus', html)
         self.assertIn('outline: none', html)
         self.assertNotIn('color-mix(', html)
+
         self.assertIn('const MAP_PALETTES = {', mapScript)
         self.assertIn('const createPalette = (themeState)', mapScript)
         self.assertIn('const createStyle = (themeState)', mapScript)
         self.assertIn('style: createStyle(state)', mapScript)
         self.assertIn('const styleKey = ()', mapScript)
+
         self.assertIn("url: 'https://tiles.openfreemap.org/planet'", mapScript)
         self.assertIn("glyphs: 'https://tiles.openfreemap.org/fonts/", mapScript)
         self.assertIn("'source-layer': 'water'", mapScript)
@@ -843,6 +853,7 @@ class EndpointInfoServiceTest(unittest.TestCase):
         self.assertNotIn('tile.openstreetmap.org', html)
         self.assertNotIn('opacity: 0.60', html)
         self.assertNotIn('opacity: 0.60', mapScript)
+
         self.assertTrue(mapScriptPath.is_file())
         self.assertTrue((widget.mapWidget.HtmlPath.parent / 'maplibre-gl.js').is_file())
         self.assertTrue(
@@ -897,6 +908,7 @@ class EndpointInfoServiceTest(unittest.TestCase):
         )
 
         previousRevision = widget.mapWidget._viewRevision
+
         service.completeRefresh()
 
         processQtEvents()

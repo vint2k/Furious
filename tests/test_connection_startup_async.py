@@ -222,14 +222,19 @@ class ConnectionStartupAsyncTest(TestCase):
             readiness=CoreRuntimeStartup(endpoint=endpoint, timeout=1500),
         )
         manager = self._manager()
+
         operation = self._operation(manager, launch)
+
         succeeded = []
         timerEvents = []
+
         operation.succeeded.connect(succeeded.append)
         QtCore.QTimer.singleShot(0, lambda: timerEvents.append(True))
 
         self.assertEqual(operation.stage, ConnectionStartStage.Pending)
+
         self.assertTrue(waitFor(lambda: bool(succeeded), timeout=0.5))
+
         self.assertEqual(timerEvents, [True])
         self.assertEqual(manager.runtimes, [runtime])
         self.assertEqual(runtime.startOptions[0], {})

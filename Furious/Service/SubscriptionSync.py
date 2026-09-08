@@ -140,6 +140,7 @@ class SubscriptionSynchronizer:
             profiles[index].metadata.profileId: profiles[index]
             for index in managedIndexes
         }
+
         synchronized = []
 
         for prepared in plan.profiles:
@@ -246,6 +247,7 @@ class SubscriptionSynchronizer:
             ): profiles[index]
             for index in managedIndexes
         }
+
         synchronized = []
         incomingMetadata = []
         existingUpdates = []

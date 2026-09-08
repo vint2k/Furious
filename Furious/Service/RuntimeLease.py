@@ -71,6 +71,7 @@ class RuntimeEventRouter(QtCore.QObject):
         self._attemptMethod = ''
         self._committedCallback = None
         self._terminalDelivered = False
+
         self._publishedConnection = connectWeakly(
             self._published,
             self,

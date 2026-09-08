@@ -249,6 +249,7 @@ class _RuntimeReadinessProbe(QtCore.QObject):
         self._terminal = True
         self._timer.stop()
         self._socket.abort()
+
         self.ready.emit()
 
     def _finishFailed(self, message):
@@ -259,6 +260,7 @@ class _RuntimeReadinessProbe(QtCore.QObject):
         self._terminal = True
         self._timer.stop()
         self._socket.abort()
+
         self.failed.emit(str(message))
 
     def cancel(self):
@@ -330,6 +332,7 @@ class _ConditionProbe(QtCore.QObject):
 
         self._terminal = True
         self._timer.stop()
+
         self.finished.emit(bool(success))
 
     def cancel(self):
@@ -377,6 +380,7 @@ class ConnectionStartOperation(QtCore.QObject):
         self.proxyModeOnly = proxyModeOnly
         self.log = log
         self.options = dict(options or {})
+
         self.attempt = _ConnectionStartAttempt(
             manager, manager._runtimeConfiguration(config, deepcopy)
         )
@@ -558,6 +562,7 @@ class ConnectionStartOperation(QtCore.QObject):
 
         self._readinessProbe = None
         self._conditionContinuation = ''
+
         self._fail('Failed to start core', message)
 
     def _afterPrimaryReady(self):
@@ -605,6 +610,7 @@ class ConnectionStartOperation(QtCore.QObject):
                 f'\'DefaultPrimaryGatewayIP\': {userGateway}. '
                 f'\'PrimaryAdapterInterfaceIP\': {userInterfaceIP}'
             )
+
             self._gateway, self._interface = userGateway, userInterfaceIP
         else:
             logger.info(
@@ -612,6 +618,7 @@ class ConnectionStartOperation(QtCore.QObject):
                 '\'DefaultPrimaryGatewayIP\' and '
                 '\'PrimaryAdapterInterfaceIP\''
             )
+
             defaultGateway = SystemRoutingTable.getDefaultGateway()
 
             if PLATFORM == 'Darwin':
@@ -944,6 +951,7 @@ class ConnectionStartOperation(QtCore.QObject):
             for sourceIP, destinationIP in SystemRoutingTable.managedRoutes
             if iproute.find(route(sourceIP, destinationIP)) == -1
         )
+
         tempdir = os.environ.get('TMPDIR') if SystemRuntime.flatpakID() else None
 
         with tempfile.NamedTemporaryFile(
@@ -1013,8 +1021,10 @@ class ConnectionStartOperation(QtCore.QObject):
 
         self.attempt.commit(self.exitCallback)
         self._terminal = True
+
         self._setStage(ConnectionStartStage.Succeeded)
         self.succeeded.emit(self)
+
         self.manager._finishStartOperation(self)
         self.deleteLater()
 
@@ -1048,8 +1058,10 @@ class ConnectionStartOperation(QtCore.QObject):
             self.manager._lastStartError = concise
 
         self.attempt.rollback(f'connection startup failed: {details or concise}')
+
         self._setStage(ConnectionStartStage.Failed)
         self.failed.emit(self, concise, str(details or ''))
+
         self.manager._finishStartOperation(self)
         self.deleteLater()
 
@@ -1060,9 +1072,12 @@ class ConnectionStartOperation(QtCore.QObject):
 
         self._terminal = True
         self._cancelObservers()
+
         self.attempt.rollback('connection startup cancelled')
+
         self._setStage(ConnectionStartStage.Cancelled)
         self.cancelled.emit(self)
+
         self.manager._finishStartOperation(self)
         self.deleteLater()
 

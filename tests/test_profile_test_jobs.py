@@ -395,16 +395,20 @@ class ProfileTestServiceTest(unittest.TestCase):
         processQtEvents()
 
         first = _ControlledDownloadWorker.instances[0]
+
         active.deleted = True
         queued.deleted = True
         self._setProfiles((valid,))
+
         manager.reconcileProfiles()
 
         self.assertEqual(first.cancelCount, 1)
         self.assertEqual(len(scheduler.queue), 1)
 
         first.publish('stale result')
+
         self.assertEqual(valid.metadata.speed, '')
+
         processQtEvents()
 
         self.assertFalse(isValid(first))
@@ -518,11 +522,13 @@ class ProfileTestServiceTest(unittest.TestCase):
 
         manager.testPing((running, queued, valid))
         processQtEvents()
+
         first = pool.started[0]
 
         running.deleted = True
         queued.deleted = True
         self._setProfiles((valid,))
+
         manager.reconcileProfiles()
 
         self.assertIs(first.job.state, ProfileTestJobState.Cancelled)
@@ -801,6 +807,7 @@ class ProfileTestServiceTest(unittest.TestCase):
         )
 
         self._setProfiles((retained, replacement, other, manual))
+
         manager.invalidateSubscriptions({'group-a'}, clearResults=True)
 
         self.assertIs(activeLatency.job.state, ProfileTestJobState.Cancelled)
@@ -824,6 +831,7 @@ class ProfileTestServiceTest(unittest.TestCase):
         self.assertEqual(retained.metadata.speed, '')
         self.assertEqual(replacement.metadata.latency, '')
         self.assertEqual(replacement.metadata.speed, '')
+
         self.assertEqual(other.metadata.latency, 'other latency')
         self.assertEqual(other.metadata.speed, 'other speed')
         self.assertEqual(manual.metadata.latency, 'manual latency')

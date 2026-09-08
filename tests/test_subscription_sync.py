@@ -93,15 +93,18 @@ class SubscriptionSynchronizerTest(unittest.TestCase):
         self.assertIs(profiles[0], manual)
         self.assertIs(profiles[1], retained)
         self.assertIs(profiles[-1], other)
+
         self.assertEqual(retained.metadata.profileId, originalId)
         self.assertEqual(retained.itemRemark, 'Remote label')
         self.assertTrue(retained.metadata.favorite)
         self.assertEqual(retained.connection['address'], 'new.example')
+
         self.assertTrue(removed.deleted)
         self.assertEqual(
             tuple(item.index for item in profiles),
             tuple(range(len(profiles))),
         )
+
         self.assertEqual(manual.itemSubscription, '')
         self.assertFalse(manual.itemSubscriptionManaged)
         self.assertEqual(other.connection['address'], 'other.example')

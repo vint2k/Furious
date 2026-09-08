@@ -332,6 +332,7 @@ class TrafficStatsManager(
         self._sampleTimer.stop()
         self._generation += 1
         self._cancelCurrentQuery()
+
         self._monitor = monitor
         self._resetSamples()
         self._beginConnectionUsage()
@@ -375,6 +376,7 @@ class TrafficStatsManager(
             monitor = getPluginRegistry().trafficStatsMonitorForRuntimes(
                 self._activeRuntimes()
             )
+
             self._activateMonitor(monitor)
 
     @QtCore.Slot()
@@ -488,6 +490,7 @@ class TrafficStatsManager(
         if counters is None:
             self._previousCounters = None
             self._previousSampleTime = None
+
             self.statisticsUnavailable.emit()
 
             return
@@ -510,6 +513,7 @@ class TrafficStatsManager(
         monitor = getPluginRegistry().trafficStatsMonitorForRuntimes(
             self._activeRuntimes()
         )
+
         self._activateMonitor(monitor)
 
     def disconnectedCallback(self):

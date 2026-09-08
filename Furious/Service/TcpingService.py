@@ -128,6 +128,7 @@ class TcpingProbe(QtCore.QObject):
         """Start one non-blocking TCP connection attempt."""
         self.elapsedTimer.start()
         self.timeoutTimer.start(self.request.timeoutMilliseconds)
+
         self.socket.connectToHost(self.request.address, self.request.port)
 
     @QtCore.Slot()
@@ -153,6 +154,7 @@ class TcpingProbe(QtCore.QObject):
             return
 
         self.completionHasRun = True
+
         self.timeoutTimer.stop()
 
         if self.socket.state() != QAbstractSocket.SocketState.UnconnectedState:
@@ -215,6 +217,7 @@ class TcpingEngine(QtCore.QObject):
             return
 
         self.pendingRequests.extend(requests)
+
         self.drain()
 
     def drain(self):
@@ -320,6 +323,7 @@ class TcpingEngine(QtCore.QObject):
             return
 
         self.stopping = True
+
         self.pendingRequests.clear()
 
         for probe in list(self.activeProbes.values()):

@@ -1034,6 +1034,7 @@ class DesktopApplication(ApplicationRunner, SingletonApplication):
 
             self.addCustomFont()
             # self.configureApplicationFont()
+
             self.configureLogging()
             self._logRuntimeInformation()
 

@@ -192,6 +192,7 @@ class ConnectionController(QtCore.QObject):
         """Restore disconnected state after all runtime resources stop."""
         self._startOperation = None
         self._pendingHttpProxy = ''
+
         self.progressFinished.emit(True)
         self._setActiveProfile(None)
 
@@ -275,6 +276,7 @@ class ConnectionController(QtCore.QObject):
         self._lastError = None
         self._setActiveProfile(configuration)
         self._pendingHttpProxy = httpProxy
+
         self._startConnecting()
 
         logManager = AppLogManager()
@@ -405,6 +407,7 @@ class ConnectionController(QtCore.QObject):
             interval *= 2
 
         self._actionTimer.start(interval)
+
         self._runPostConnectTasksOnce()
 
         return True
@@ -459,6 +462,7 @@ class ConnectionController(QtCore.QObject):
 
         self._startOperation = None
         self._emitRuntimesChanged()
+
         self._reset()
 
     def startDisconnection(self, notification: str = '') -> bool:

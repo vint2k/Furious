@@ -70,6 +70,7 @@ class DnsResolutionOperation(QtCore.QObject):
             logger.error(f'failed to start DNS resolution for {self._domain!r}: {ex}')
 
             self._resultMap['error'] = True
+
             self._finish()
 
             return
@@ -114,6 +115,7 @@ class DnsResolutionOperation(QtCore.QObject):
 
         self._terminal = True
         self._timer.stop()
+
         self.finished.emit(
             bool(self._resultMap['error']),
             list(self._resultMap['result'].keys()),

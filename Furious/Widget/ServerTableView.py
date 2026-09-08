@@ -268,6 +268,7 @@ class DeleteServersProgressDialog(AppQTransientDialog):
         Storage.UserServers().pop(deleteIndex)
 
         self.table.sourceModel.endRemoveRows()
+
         self.table.reconcileProfileTestJobs()
 
         if not self.deletedActivated and deleteIndex < Storage.UserActivatedItemIndex():
@@ -276,6 +277,7 @@ class DeleteServersProgressDialog(AppQTransientDialog):
             )
 
         self.deletedCount += 1
+
         self.updateStatus()
 
         singleShotWeakly(0, self, 'deleteNext')
@@ -1716,6 +1718,7 @@ class ServerTableView(
                 showTrayMessage=showTrayMessage,
                 parent=self.window(),
             )
+
             dialog.open()
 
             return 0

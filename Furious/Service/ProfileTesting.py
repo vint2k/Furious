@@ -523,6 +523,7 @@ class _LatencyScheduler(QtCore.QObject):
             worker = self.pingWorkerFactory(job, self)
 
             self.activeJobs[id(job)] = (job, worker)
+
             self.threadPool.start(worker)
 
     @QtCore.Slot(object, object)
@@ -534,6 +535,7 @@ class _LatencyScheduler(QtCore.QObject):
             return
 
         self.completeJob(job, result)
+
         self.scheduleDrain()
 
     def reconcileProfiles(self):
@@ -551,12 +553,14 @@ class _LatencyScheduler(QtCore.QObject):
         for job, worker in list(self.activeJobs.values()):
             if self._resolveTarget(job.target) is None:
                 job.state = ProfileTestJobState.Cancelled
+
                 cancel = getattr(worker, 'cancel', None)
 
                 if callable(cancel):
                     cancel()
 
         self.discardTcpingJobs(lambda job: self._resolveTarget(job.target) is None)
+
         self.scheduleDrain()
 
     def invalidateSubscriptions(self, subscriptionIds):
@@ -575,6 +579,7 @@ class _LatencyScheduler(QtCore.QObject):
         for job, worker in list(self.activeJobs.values()):
             if job.target.subscriptionSource in subscriptionIds:
                 job.state = ProfileTestJobState.Cancelled
+
                 cancel = getattr(worker, 'cancel', None)
 
                 if callable(cancel):
@@ -624,6 +629,7 @@ class _LatencyScheduler(QtCore.QObject):
 
         for job, worker in list(self.activeJobs.values()):
             job.state = ProfileTestJobState.Cancelled
+
             cancel = getattr(worker, 'cancel', None)
 
             if callable(cancel):
@@ -815,6 +821,7 @@ class _DownloadSpeedWorker(HttpGetManager):
             return
 
         self.cancelled = True
+
         self.coreStartupTimer.stop()
         self.timeoutTimer.stop()
 
@@ -985,6 +992,7 @@ class _DownloadSpeedWorker(HttpGetManager):
             self.setResult('Core start failed', publish=False)
 
         self._releaseRuntime()
+
         self.publishProgress()
 
     def hasDataCallback(self, networkReply, **_kwargs):
@@ -1033,6 +1041,7 @@ class _DownloadSpeedWorker(HttpGetManager):
             self.setResult(value, publish=False)
 
         self._releaseRuntime()
+
         self.publishProgress()
 
 
@@ -1081,6 +1090,7 @@ class _DownloadSpeedScheduler(QtCore.QObject):
             _DownloadSpeedTestJob(ProfileTestTarget.capture(profile), options)
             for profile in profiles
         )
+
         self.scheduleDrain()
 
     def cancelAll(self):
@@ -1208,6 +1218,7 @@ class _DownloadSpeedScheduler(QtCore.QObject):
 
         self.activePorts.discard(port)
         worker.deleteLater()
+
         self.scheduleDrain()
 
     def reconcileProfiles(self):
@@ -1285,6 +1296,7 @@ class ProfileTestManager(QtCore.QObject):
 
         self._profilesProvider = profilesProvider or Storage.UserServers
         self._targets = _currentTargets(self._profilesProvider())
+
         self._latencyScheduler = _LatencyScheduler(
             self.resolveTarget,
             self.applyResult,
@@ -1376,6 +1388,7 @@ class ProfileTestManager(QtCore.QObject):
             if concurrent
             else self._serialDownloadScheduler
         )
+
         scheduler.enqueue(profiles, options)
 
     def clearResults(self, profiles):
@@ -1411,6 +1424,7 @@ class ProfileTestManager(QtCore.QObject):
                 for profile in self._profilesProvider()
                 if profile.metadata.subscriptionSource in subscriptionIds
             ]
+
             self.clearResults(profiles)
 
         self.reconcileProfiles()

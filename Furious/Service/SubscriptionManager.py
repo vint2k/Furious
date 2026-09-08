@@ -660,6 +660,7 @@ class SubscriptionManager(HttpGetManager):
                 logger.exception(
                     f'failed to commit subscription {context.get("unique", "")!r}'
                 )
+
                 self._failOperation(context, error)
 
             return
@@ -667,8 +668,10 @@ class SubscriptionManager(HttpGetManager):
         committed = {**context, 'syncResult': result}
 
         self.subscriptionCommitted.emit(context['unique'])
+
         self._recordGroupSuccess(committed, result)
         self.subscriptionStateChanged.emit((context['unique'],))
+
         self._finishOperation(committed, successful=committed, structural=True)
 
         logger.info(
@@ -815,7 +818,9 @@ class SubscriptionManager(HttpGetManager):
 
         controller = AppConnectionController()
         wasConnected = controller is not None and controller.isConnected()
+
         result = self.synchronizer.commit(servers, plan)
+
         newActivatedIndex = next(
             (
                 index

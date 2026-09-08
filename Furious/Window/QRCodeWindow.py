@@ -360,6 +360,7 @@ class QRCodeWindow(AppQMainWindow):
 
         self.cancelExport()
         self._clearTabs()
+
         self._exportProcessedCount = 0
         self._exportGeneratedCount = 0
 
@@ -372,15 +373,18 @@ class QRCodeWindow(AppQMainWindow):
             if self.appendExportItem(items[0]):
                 self._exportProcessedCount = 1
                 self._exportGeneratedCount = 1
+
                 self.show()
             else:
                 self._exportProcessedCount = 1
+
                 self.deleteLater()
 
             return self
 
         self._exportItems = items
         self._exporting = True
+
         self.show()
         self._exportTimer.start(0)
 

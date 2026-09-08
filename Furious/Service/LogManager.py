@@ -331,6 +331,7 @@ class LogManager(QtCore.QObject):
         self._retainedEntryCount = 0
         self._retainedCharacters = 0
         self._generationSequence = 0
+
         # Three fixed active streams preserve exact global ordering with an O(n)
         # three-way merge and make oldest-live selection constant time. Runtime
         # categories are isolated so disconnect/runtime clear is one reference
@@ -341,6 +342,7 @@ class LogManager(QtCore.QObject):
         self._otherGeneration = self._newGenerationLocked('other')
         self._runtimeCategoryIds = frozenset()
         self._nonApplicationCategoryIds = frozenset()
+
         # Retired batches remain strongly owned until bounded cleanup removes
         # their entries. Merely dropping a large OrderedDict here would make the
         # clear caller synchronously execute thousands of CPython decrefs.

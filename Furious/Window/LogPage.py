@@ -197,6 +197,7 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
         self.pageTitleLabel.setObjectName('LogPageTitle')
 
         self.filterLabel = AppQLabel(_('Log Type'))
+
         # Category names can be either translated built-ins or literal plugin
         # metadata, so LogPage rebuilds this application-styled selector with
         # the correct per-category translation policy.
@@ -403,6 +404,7 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
         self.autoScrollSwitch.toggled.connect(self._autoScrollChanged)
         self.autoClearSwitch.toggled.connect(self._autoClearChanged)
         self.manager.categoryRegistered.connect(self._categoryRegistered)
+
         # Do not drive the document directly from entryAdded: cross-thread Qt
         # delivery can occur after that entry was evicted or its generation was
         # cleared, and one queued signal per line defeats batching under a burst.
@@ -665,6 +667,7 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
             self._documentMutation = False
 
         self.textBrowser.viewport().update()
+
         self._renderedCategoryId = categoryId
         self._representationInvalid = False
 
@@ -715,6 +718,7 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
             )
 
             self._entryCursor = None
+
             self._requestRefresh(invalidate=True, immediate=True)
 
             return
@@ -748,6 +752,7 @@ class LogPage(Mixins.QTranslatable, QMainWindow):
         document = self.textBrowser.document()
         start = self._highlightNextBlock
         maximumEnd = min(document.blockCount(), start + self.HighlightBatchSize)
+
         elapsed = QtCore.QElapsedTimer()
         elapsed.start()
         end = start

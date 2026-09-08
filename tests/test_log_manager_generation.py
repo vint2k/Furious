@@ -643,11 +643,14 @@ class GenerationLogManagerContractTest(unittest.TestCase):
 
         globalCursor = globalBatch.cursor
         secondCursor = manager.entriesSince(None, 'other.second').cursor
+
         manager.clear('other.extra')
         manager.append('second new', 'other.second')
 
         self.assertTrue(manager.entriesSince(globalCursor).resetRequired)
+
         secondBatch = manager.entriesSince(secondCursor, 'other.second')
+
         self.assertTrue(secondBatch.resetRequired)
         self.assertEqual(
             tuple(entry.message for entry in secondBatch.entries),
@@ -666,10 +669,12 @@ class GenerationLogManagerContractTest(unittest.TestCase):
         batched = self.makeManager(**options)
         repeated = self.makeManager(**options)
         messages = tuple(f'core-{index}-payload' for index in range(11))
+
         added = []
         cleared = []
         changed = []
         observedSnapshots = []
+
         batched.entryAdded.connect(added.append)
         batched.entryAdded.connect(
             lambda _entry: observedSnapshots.append(batched.entries())
@@ -698,16 +703,20 @@ class GenerationLogManagerContractTest(unittest.TestCase):
         self.assertEqual(batchEntries, repeatedEntries)
         self.assertEqual(batched.entries(), repeated.entries())
         self.assertEqual(batched.retainedCharacters, repeated.retainedCharacters)
+
         self.assertEqual(added, list(batchEntries))
         self.assertTrue(observedSnapshots)
         self.assertTrue(
             all(snapshot == batched.entries() for snapshot in observedSnapshots)
         )
         self.assertEqual(len(cleared), 3)
+
         processQtEvents()
+
         self.assertEqual(changed, [batchEntries[-1].sequence])
         self.assertLessEqual(batched.entryCount(), batched.maximumEntries)
         self.assertLessEqual(batched.retainedCharacters, batched.maximumCharacters)
+
         _assertManagerInvariants(self, batched)
         _assertManagerInvariants(self, repeated)
 
