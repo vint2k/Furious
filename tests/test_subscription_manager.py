@@ -29,6 +29,7 @@ from Furious.Qt import gettext
 from Furious.Service.SubscriptionManager import (
     SubscriptionManager,
     _SubscriptionBatchState,
+    _parseSubscriptionUserInfo,
 )
 from Furious.Window.SubscriptionPage import SubscriptionPage
 from Furious.Widget.SubscriptionTableView import SubscriptionTableView
@@ -56,15 +57,21 @@ class _Payload:
 class _Reply:
     """Provide deterministic response data and failure diagnostics."""
 
-    def __init__(self, value=b'', error='request failed'):
+    def __init__(self, value=b'', error='request failed', headers=None):
         self._value = value
         self._error = error
+        self._headers = {
+            bytes(name).lower(): value for name, value in (headers or {}).items()
+        }
 
     def readAll(self):
         return _Payload(self._value)
 
     def errorString(self):
         return self._error
+
+    def rawHeader(self, name):
+        return self._headers.get(bytes(name).lower(), b'')
 
 
 class _AbortableReply:
@@ -127,7 +134,15 @@ class SubscriptionManagerTest(TestCase):
             return_value=None,
         ):
             manager.successCallback(
-                _Reply(b'payload'),
+                _Reply(
+                    b'payload',
+                    headers={
+                        b'Subscription-Userinfo': (
+                            b'upload=1024; download=2048; total=8192; '
+                            b'expire=1893456000'
+                        )
+                    },
+                ),
                 unique='group-a',
                 remark='Group A',
                 webURL='https://invalid.test/subscription',
@@ -138,6 +153,15 @@ class SubscriptionManagerTest(TestCase):
         self.assertEqual(len(successful), 1)
         self.assertEqual(successful[0]['profiles'], (profile,))
         self.assertEqual(successful[0]['decoderId'], 'decoder')
+        self.assertEqual(
+            successful[0]['subscriptionInfo'],
+            {
+                'upload': 1024,
+                'download': 2048,
+                'total': 8192,
+                'expire': 1893456000,
+            },
+        )
         self.assertEqual(failed, [])
 
         manager.importer = SimpleNamespace(importPayload=mock.Mock(return_value=None))
@@ -155,6 +179,115 @@ class SubscriptionManagerTest(TestCase):
 
         self.assertEqual(failed[-1]['error'], 'UnsupportedSubscriptionFormat')
         manager.deleteLater()
+
+    def testSubscriptionUserInfoParserRejectsInvalidAndUnboundedValues(self):
+        """Treat provider quota headers as bounded advisory network input."""
+        self.assertIsNone(_parseSubscriptionUserInfo(b''))
+        self.assertIsNone(_parseSubscriptionUserInfo(b'upload=\xff'))
+        self.assertEqual(
+            _parseSubscriptionUserInfo(QtCore.QByteArray(b'Upload=1')),
+            {'upload': 1, 'download': 0, 'total': 0, 'expire': 0},
+        )
+        self.assertEqual(
+            _parseSubscriptionUserInfo(
+                b'upload=1024; download=2048; total=8192; expire=1893456000; '
+                b'ignored=value; upload=-1; total=999999999999999999999999'
+            ),
+            {
+                'upload': 1024,
+                'download': 2048,
+                'total': 8192,
+                'expire': 1893456000,
+            },
+        )
+
+    def testBatchResponseCarriesSubscriptionInfoIntoWorkerContext(self):
+        """Keep response metadata attached to the exact asynchronous request."""
+        manager = self._manager()
+        manager._isCurrentRequest = mock.Mock(return_value=True)
+        manager.importer = SimpleNamespace(
+            registry=SimpleNamespace(
+                subscriptionDecoderWorkerSafe=mock.Mock(return_value=True)
+            )
+        )
+        manager._startImportPreparation = mock.Mock()
+
+        manager.successCallback(
+            _Reply(
+                b'payload',
+                headers={
+                    b'Subscription-Userinfo': (
+                        b'upload=1024; download=2048; total=8192; ' b'expire=1893456000'
+                    )
+                },
+            ),
+            unique='group-a',
+            batchId=7,
+            lastDecoderId='decoder',
+        )
+
+        payload, context = manager._startImportPreparation.call_args.args
+        self.assertEqual(payload, b'payload')
+        self.assertEqual(
+            context['subscriptionInfo'],
+            {
+                'upload': 1024,
+                'download': 2048,
+                'total': 8192,
+                'expire': 1893456000,
+            },
+        )
+        manager.deleteLater()
+
+    def testSuccessfulCommitReplacesSubscriptionInfoButFailurePreservesIt(self):
+        """Tie advisory metadata to the same successful group commit boundary."""
+        group = SubscriptionGroup(
+            id='group-a',
+            subscriptionUpload=1,
+            subscriptionDownload=2,
+            subscriptionTotal=3,
+            subscriptionExpire=4,
+        )
+        result = SimpleNamespace(profileIds=('profile-a', 'profile-b'))
+
+        with (
+            mock.patch.object(Storage, 'SubscriptionGroup', return_value=group),
+            mock.patch.object(Storage, 'upsertSubscriptionGroup') as upsert,
+        ):
+            SubscriptionManager._recordGroupSuccess(
+                {
+                    'unique': 'group-a',
+                    'decoderId': 'decoder',
+                    'subscriptionInfo': {
+                        'upload': 1024,
+                        'download': 2048,
+                        'total': 8192,
+                        'expire': 1893456000,
+                    },
+                },
+                result,
+            )
+            SubscriptionManager._recordGroupFailure(
+                {'unique': 'group-a', 'error': 'offline'}
+            )
+            metadataAfterFailure = (
+                group.subscriptionUpload,
+                group.subscriptionDownload,
+                group.subscriptionTotal,
+                group.subscriptionExpire,
+            )
+            SubscriptionManager._recordGroupSuccess(
+                {'unique': 'group-a', 'subscriptionInfo': None},
+                result,
+            )
+
+        self.assertEqual(metadataAfterFailure, (1024, 2048, 8192, 1893456000))
+        self.assertEqual(group.subscriptionUpload, 0)
+        self.assertEqual(group.subscriptionDownload, 0)
+        self.assertEqual(group.subscriptionTotal, 0)
+        self.assertEqual(group.subscriptionExpire, 0)
+        self.assertEqual(group.lastSyncStatus, 'success')
+        self.assertEqual(upsert.call_count, 3)
 
     def testRequestFailureIsDataForPresentationNotAWidgetSideEffect(self):
         manager = self._manager()
@@ -701,6 +834,41 @@ class SubscriptionManagerTest(TestCase):
         self.assertEqual(gettext('Updating...', 'RU'), 'Обновление...')
         self.assertEqual(gettext('Updated', 'ZH'), '已更新')
         self.assertEqual(gettext('Update Failed', 'ZH'), '更新失败')
+        self.assertEqual(gettext('Usage / Expiry', 'RU'), 'Трафик / Срок')
+        self.assertEqual(gettext('Usage / Expiry', 'ZH'), '用量 / 到期')
+
+    def testSubscriptionTableShowsOptionalUsageAndExpiryMetadata(self):
+        """Keep provider metadata compact and blank when it is unavailable."""
+        subscriptions = {
+            'group-a': self._subscription(
+                subscriptionUpload=1024,
+                subscriptionDownload=2048,
+                subscriptionTotal=8192,
+                subscriptionExpire=1893456000,
+            ),
+            'group-b': self._subscription(
+                remark='Group B',
+                webURL='https://invalid.test/b',
+            ),
+        }
+
+        with mock.patch.object(Storage, 'UserSubs', return_value=subscriptions):
+            table = SubscriptionTableView()
+            model = table.sourceModel
+            column = table.ItemKey.index('subscriptionInfo')
+
+            self.assertEqual(
+                model.data(model.index(0, column), QtCore.Qt.ItemDataRole.DisplayRole),
+                '3 KiB / 8 KiB · 2030-01-01',
+            )
+            self.assertEqual(
+                model.data(model.index(1, column), QtCore.Qt.ItemDataRole.DisplayRole),
+                '',
+            )
+            self.assertFalse(
+                model.flags(model.index(0, column)) & QtCore.Qt.ItemFlag.ItemIsEditable
+            )
+            table.deleteLater()
 
     def testSubscriptionStateNotificationRepaintsOnlyAffectedMetadataRow(self):
         """Resolve stable IDs at delivery and avoid a whole-table refresh."""

@@ -54,6 +54,10 @@ class SubscriptionGroup:
     lastSyncStatus: str = ''
     lastSyncError: str = ''
     profileCount: int = 0
+    subscriptionUpload: int = 0
+    subscriptionDownload: int = 0
+    subscriptionTotal: int = 0
+    subscriptionExpire: int = 0
     extras: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -77,6 +81,10 @@ class SubscriptionGroup:
                 ('lastSyncStatus', ''),
                 ('lastSyncError', ''),
                 ('profileCount', 0),
+                ('subscriptionUpload', 0),
+                ('subscriptionDownload', 0),
+                ('subscriptionTotal', 0),
+                ('subscriptionExpire', 0),
             )
         }
 
@@ -110,6 +118,17 @@ class SubscriptionGroup:
             except (TypeError, ValueError):
                 known[name] = 0
 
+        for name in (
+            'subscriptionUpload',
+            'subscriptionDownload',
+            'subscriptionTotal',
+            'subscriptionExpire',
+        ):
+            try:
+                known[name] = min(max(0, int(known[name])), (1 << 63) - 1)
+            except (TypeError, ValueError):
+                known[name] = 0
+
         extras = dict(nestedExtras) if isinstance(nestedExtras, Mapping) else {}
         extras.update(data)
 
@@ -133,6 +152,10 @@ class SubscriptionGroup:
                 'lastSyncStatus': self.lastSyncStatus,
                 'lastSyncError': self.lastSyncError,
                 'profileCount': self.profileCount,
+                'subscriptionUpload': self.subscriptionUpload,
+                'subscriptionDownload': self.subscriptionDownload,
+                'subscriptionTotal': self.subscriptionTotal,
+                'subscriptionExpire': self.subscriptionExpire,
             }
         )
 

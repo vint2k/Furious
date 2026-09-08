@@ -4,7 +4,6 @@ TRANSLATION = {
             "Furious.Backends.Xray.AssetWindow",
             "Furious.Backends.Xray.RoutingWindow",
             "Furious.Widget.ServerTableView",
-            "Furious.Widget.SubscriptionTableView",
             "Furious.Window.SubscriptionPage"
         ],
         "RU": "Удалить",
@@ -394,7 +393,6 @@ TRANSLATION = {
     },
     "Invalid server configuration": {
         "source": [
-            "Furious.Controllers.ConnectionController",
             "Furious.Window.TextEditorWindow"
         ],
         "RU": "Неверная конфигурация сервера",
@@ -844,22 +842,6 @@ TRANSLATION = {
         ],
         "RU": "Неизвестная ошибка",
         "ZH": "未知错误",
-        "isReviewed": "True"
-    },
-    "Failed to start core": {
-        "source": [
-            "Furious.Controllers.ConnectionController"
-        ],
-        "RU": "Сбой при запуске ядра",
-        "ZH": "内核启动失败",
-        "isReviewed": "True"
-    },
-    "Core terminated unexpectedly": {
-        "source": [
-            "Furious.Controllers.ConnectionController"
-        ],
-        "RU": "Неожиданное завершение работы ядра",
-        "ZH": "内核意外终止",
         "isReviewed": "True"
     },
     "Disconnected": {
@@ -3316,6 +3298,14 @@ TRANSLATION = {
         ],
         "RU": "Ошибка обновления",
         "ZH": "更新失败",
+        "isReviewed": "True"
+    },
+    "Usage / Expiry": {
+        "source": [
+            "Furious.Widget.SubscriptionTableView"
+        ],
+        "RU": "Трафик / Срок",
+        "ZH": "用量 / 到期",
         "isReviewed": "True"
     }
 }

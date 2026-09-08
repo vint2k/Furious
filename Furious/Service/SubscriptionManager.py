@@ -85,6 +85,57 @@ SUBSCRIPTION_PROXY_OPTIONS = (
     'No proxy',
 )
 
+SUBSCRIPTION_USERINFO_HEADER = b'Subscription-Userinfo'
+SUBSCRIPTION_USERINFO_KEYS = ('upload', 'download', 'total', 'expire')
+MAXIMUM_SUBSCRIPTION_USERINFO_LENGTH = 4096
+MAXIMUM_SUBSCRIPTION_USERINFO_VALUE = (1 << 63) - 1
+
+
+def _parseSubscriptionUserInfo(value) -> dict[str, int] | None:
+    """Parse bounded non-negative values from a subscription response header."""
+    if value is None:
+        return None
+
+    if isinstance(value, QtCore.QByteArray):
+        value = bytes(value)
+    elif isinstance(value, (bytearray, memoryview)):
+        value = bytes(value)
+
+    if isinstance(value, bytes):
+        try:
+            text = value[:MAXIMUM_SUBSCRIPTION_USERINFO_LENGTH].decode('ascii')
+        except UnicodeDecodeError:
+            return None
+    elif isinstance(value, str):
+        text = value[:MAXIMUM_SUBSCRIPTION_USERINFO_LENGTH]
+    else:
+        return None
+
+    if not text.strip():
+        return None
+
+    result = {key: 0 for key in SUBSCRIPTION_USERINFO_KEYS}
+
+    for part in text.split(';'):
+        key, separator, rawValue = part.partition('=')
+        key = key.strip().casefold()
+        rawValue = rawValue.strip()
+
+        if (
+            not separator
+            or key not in result
+            or not rawValue.isascii()
+            or not rawValue.isdecimal()
+        ):
+            continue
+
+        parsed = int(rawValue)
+
+        if parsed <= MAXIMUM_SUBSCRIPTION_USERINFO_VALUE:
+            result[key] = parsed
+
+    return result
+
 
 def resolveSubscriptionProxy(option: str):
     """Resolve one persisted subscription proxy policy."""
@@ -838,6 +889,14 @@ class SubscriptionManager(HttpGetManager):
             group.lastSyncError = ''
             group.profileCount = len(result.profileIds)
 
+            if 'subscriptionInfo' in param:
+                subscriptionInfo = param.get('subscriptionInfo') or {}
+
+                group.subscriptionUpload = subscriptionInfo.get('upload', 0)
+                group.subscriptionDownload = subscriptionInfo.get('download', 0)
+                group.subscriptionTotal = subscriptionInfo.get('total', 0)
+                group.subscriptionExpire = subscriptionInfo.get('expire', 0)
+
             Storage.upsertSubscriptionGroup(group)
         except Exception:
             # Any non-exit exceptions
@@ -955,7 +1014,14 @@ class SubscriptionManager(HttpGetManager):
         if 'batchId' in kwargs:
             data = bytes(networkReply.readAll().data())
             decoderId = kwargs.get('decoderId') or kwargs.get('lastDecoderId')
-            context = {**kwargs, 'decoderId': decoderId}
+            subscriptionInfo = _parseSubscriptionUserInfo(
+                networkReply.rawHeader(SUBSCRIPTION_USERINFO_HEADER)
+            )
+            context = {
+                **kwargs,
+                'decoderId': decoderId,
+                'subscriptionInfo': subscriptionInfo,
+            }
 
             if self.importer.registry.subscriptionDecoderWorkerSafe(decoderId):
                 self._startImportPreparation(data, context)
@@ -971,6 +1037,9 @@ class SubscriptionManager(HttpGetManager):
         failureArgs = kwargs.get('failureArgs', list())
 
         data = bytes(networkReply.readAll().data())
+        subscriptionInfo = _parseSubscriptionUserInfo(
+            networkReply.rawHeader(SUBSCRIPTION_USERINFO_HEADER)
+        )
 
         source = SubscriptionSource(
             kwargs.get('unique', ''),
@@ -1013,7 +1082,12 @@ class SubscriptionManager(HttpGetManager):
         )
 
         successArgs.append(
-            {**kwargs, 'profiles': result.profiles, 'decoderId': result.decoderId}
+            {
+                **kwargs,
+                'profiles': result.profiles,
+                'decoderId': result.decoderId,
+                'subscriptionInfo': subscriptionInfo,
+            }
         )
 
     def failureCallback(self, networkReply, **kwargs):

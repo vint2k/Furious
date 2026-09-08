@@ -34,6 +34,9 @@ and temporary resources, never durable collections, shared transition authority,
   data. Workers never read live repositories or Qt models; the GUI thread verifies the full source signature and group
   revision, commits while preserving live profile identity/local metadata, then publishes coalesced status/structure.
   Post-commit reconnect/test invalidation failure is reported without undoing the committed profiles.
+- Provider-reported subscription usage/expiry metadata is untrusted advisory input. Parse it with strict bounds at the
+  network boundary and commit or clear it only alongside a successful current synchronization; failed synchronization
+  preserves the last successful metadata.
 - Log transport, traffic collection, and metric history remain bounded and independent of page visibility. Rendering may
   be lazy; collection/draining ownership is not.
 - Logging accepts concurrent producers through one bounded ordered model; runtime-only clearing and retention cannot

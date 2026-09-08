@@ -200,6 +200,25 @@ class RepositoryContractTest(unittest.TestCase):
             self.assertEqual(tuple(repository.data()), ('A', 'B', 'C', 'D', 'E'))
             self.assertFalse(repository.moveGroups(('A',), 'up'))
 
+    def testSubscriptionProviderMetadataRoundTripsWithBoundedIntegers(self):
+        """Preserve current quota metadata while normalizing persisted input."""
+        group = SubscriptionGroup.fromMapping(
+            'group-a',
+            {
+                'subscriptionUpload': '1024',
+                'subscriptionDownload': 2048,
+                'subscriptionTotal': -1,
+                'subscriptionExpire': 999999999999999999999999,
+                'futureField': 'preserved',
+            },
+        )
+
+        self.assertEqual(group.subscriptionUpload, 1024)
+        self.assertEqual(group.subscriptionDownload, 2048)
+        self.assertEqual(group.subscriptionTotal, 0)
+        self.assertEqual(group.subscriptionExpire, (1 << 63) - 1)
+        self.assertEqual(group.toMapping()['futureField'], 'preserved')
+
     def testMovingBetweenSubscriptionGroupsDetachesSyncOwnership(self):
         """Keep no-op ownership but make cross-group moves locally managed."""
         with isolatedSettings():

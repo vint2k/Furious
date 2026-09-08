@@ -33,6 +33,7 @@ from Furious.Repository import Storage, SubscriptionGroup
 from Furious.Service import (
     SUBSCRIPTION_AUTO_UPDATE_OPTIONS,
     SUBSCRIPTION_PROXY_OPTIONS,
+    formatTrafficUsage,
     resolveSubscriptionProxy,
 )
 from Furious.Qt import (
@@ -51,8 +52,9 @@ from PySide6.QtWidgets import QAbstractItemView, QHeaderView, QTableView
 
 from typing import Union, Callable
 
-import logging
+import datetime
 import functools
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +78,10 @@ class SubscriptionTableHorizontalHeader(AppQHeaderView):
         'enabled',
         'lastSyncStatus',
         'lastUpdated',
+        'subscriptionInfo',
         'profiles',
     )
-    DefaultSectionSizes = (260, 520, 120, 150, 220, 140)
+    DefaultSectionSizes = (260, 520, 120, 150, 220, 220, 140)
     LegacyColumnKeys = ('remark', 'webURL', 'autoupdate', 'proxy')
 
     # Format discriminator for the semantic JSON stored under
@@ -296,6 +299,41 @@ def subscriptionSyncStatusText(item: dict) -> str:
     }.get(str(item.get('lastSyncStatus', '')), _('Never'))
 
 
+def _nonnegativeInteger(value) -> int:
+    """Return a safe non-negative integer from persisted presentation input."""
+    try:
+        return max(int(value), 0)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def subscriptionInfoText(item: dict) -> str:
+    """Return compact provider-reported traffic usage and expiry metadata."""
+    parts = []
+    total = _nonnegativeInteger(item.get('subscriptionTotal', 0))
+
+    if total:
+        used = _nonnegativeInteger(
+            item.get('subscriptionUpload', 0)
+        ) + _nonnegativeInteger(item.get('subscriptionDownload', 0))
+
+        parts.append(f'{formatTrafficUsage(used)} / {formatTrafficUsage(total)}')
+
+    expiresAt = _nonnegativeInteger(item.get('subscriptionExpire', 0))
+
+    if expiresAt:
+        try:
+            expires = datetime.datetime.fromtimestamp(
+                expiresAt, tz=datetime.timezone.utc
+            ).date()
+        except (OverflowError, OSError, ValueError):
+            pass
+        else:
+            parts.append(expires.isoformat())
+
+    return ' · '.join(parts)
+
+
 class UserSubsTableModel(QtCore.QAbstractTableModel):
     """Expose user subs table data through a Qt item model."""
 
@@ -338,6 +376,7 @@ class UserSubsTableModel(QtCore.QAbstractTableModel):
             'enabled',
             'lastSyncStatus',
             'lastUpdated',
+            'subscriptionInfo',
             'profiles',
         ]:
             flags |= QtCore.Qt.ItemFlag.ItemIsEditable
@@ -409,6 +448,7 @@ class UserSubsTableModel(QtCore.QAbstractTableModel):
             'enabled',
             'lastSyncStatus',
             'lastUpdated',
+            'subscriptionInfo',
             'profiles',
         ]:
             return False
@@ -501,6 +541,7 @@ _TRANSLATABLE_HEADERS = [
     _('Updated'),
     _('Update Failed'),
     _('Last Updated'),
+    _('Usage / Expiry'),
     _('Profiles'),
 ]
 
@@ -529,6 +570,7 @@ class SubscriptionTableView(Mixins.QTranslatable, AppQTableView):
             'Last Updated',
             lambda item: item.get('lastUpdated', ''),
         ),
+        SubscriptionTableColumn('Usage / Expiry', subscriptionInfoText),
         SubscriptionTableColumn('Profiles'),
     ]
 
@@ -539,6 +581,7 @@ class SubscriptionTableView(Mixins.QTranslatable, AppQTableView):
         'enabled',
         'lastSyncStatus',
         'lastUpdated',
+        'subscriptionInfo',
         'profiles',
     ]
 
