@@ -171,6 +171,8 @@ class _SubscriptionBatchState:
 class SubscriptionManager(HttpGetManager):
     """Own subscription networking, decoding, reconciliation, and persistence."""
 
+    ShutdownWarningMilliseconds = 5000
+
     # Presentation metadata changed for these stable subscription IDs. This
     # deliberately does not imply that profile topology changed.
     subscriptionStateChanged = QtCore.Signal(object)
@@ -234,6 +236,9 @@ class SubscriptionManager(HttpGetManager):
 
     def _isCurrentRequest(self, kwargs) -> bool:
         """Return whether one completion still targets the current subscription."""
+        if self._shuttingDown:
+            return False
+
         version = kwargs.get('requestVersion')
 
         if version is None:
@@ -283,6 +288,9 @@ class SubscriptionManager(HttpGetManager):
 
     def _configureAutoUpdate(self, unique: str, subscription):
         """Configure one stable-ID timer from persisted subscription policy."""
+        if self._shuttingDown:
+            return
+
         autoUpdate = subscription.get('autoupdate', '')
 
         if autoUpdate not in SUBSCRIPTION_AUTO_UPDATE_OPTIONS:
@@ -419,7 +427,7 @@ class SubscriptionManager(HttpGetManager):
                 job.cancel()
 
     def shutdown(self):
-        """Boundedly stop every manager-owned request, timer, and preparation job."""
+        """Cancel owned resources and synchronously wait for preparation workers."""
         if self._shuttingDown:
             return
 
@@ -431,13 +439,16 @@ class SubscriptionManager(HttpGetManager):
         self.cancelUpdates()
         self._preparationPool.clear()
 
-        for job in self._preparationJobs.values():
-            job.cancel()
+        # The timeout is diagnostic, not permission to destroy running workers.
+        # Keep the relay/pool alive until every worker has actually finished.
+        if not self._preparationPool.waitForDone(self.ShutdownWarningMilliseconds):
+            logger.warning(
+                'subscription preparation has not stopped after %s ms; '
+                'waiting for running workers to finish',
+                self.ShutdownWarningMilliseconds,
+            )
 
-        # Running third-party Python code may not be interruptible. Keep the
-        # relay/pool alive until those exact jobs finish rather than allowing a
-        # worker to publish through a destroyed QObject during application exit.
-        self._preparationPool.waitForDone()
+            self._preparationPool.waitForDone()
 
         self._preparationJobs.clear()
         self._preparationPayloads.clear()
@@ -1119,6 +1130,9 @@ class SubscriptionManager(HttpGetManager):
 
     def updateSubsByWebGET(self, **kwargs):
         """Start one configured subscription request."""
+        if self._shuttingDown:
+            return
+
         url = kwargs.get('webURL', '')
 
         if not url:
@@ -1149,6 +1163,9 @@ class SubscriptionManager(HttpGetManager):
 
     def updateSubscriptions(self, uniques, **kwargs):
         """Start eligible stable IDs as one status and completion batch."""
+        if self._shuttingDown:
+            return
+
         subscriptions = Storage.UserSubs()
 
         batch = tuple(

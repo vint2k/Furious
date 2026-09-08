@@ -171,6 +171,10 @@ temporarily raises the cap to 1,000 and verifies real generation, event-loop yie
 exact tab completion, and window-owned timer/state destruction. These tests intentionally assert behavior and cleanup
 rather than machine-dependent elapsed-time thresholds.
 
+Subscription shutdown coverage in `test_subscription_manager.py` checks cooperative cancellation, queued-work
+removal, admission closure, and late-result rejection. A gated worker verifies that the slow-shutdown diagnostic
+preserves synchronous ownership until work actually finishes; the warning threshold is not an exit deadline.
+
 ## Packaged-build smoke procedure
 
 Packaged/Nuitka behavior is outside the source-level `unittest` fixtures. For an

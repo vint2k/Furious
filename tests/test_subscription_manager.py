@@ -1412,6 +1412,72 @@ class SubscriptionManagerTest(TestCase):
         manager.deleteLater()
         processQtEvents()
 
+    def testSlowShutdownWarnsAndRetainsWorkersUntilTheyFinish(self):
+        """Keep synchronous ownership after the warning threshold expires."""
+        manager = self._manager({})
+        manager.ShutdownWarningMilliseconds = 1
+        manager._preparationPool.setMaxThreadCount(1)
+        started = threading.Event()
+        release = threading.Event()
+        queuedStarted = threading.Event()
+        manager._handleImportedResult = mock.Mock()
+
+        def work(_isCancelled):
+            started.set()
+            # Bound the fixture even if the expected diagnostic never arrives.
+            release.wait(5)
+            return object()
+
+        def afterWarning(*_args):
+            self.assertTrue(manager._preparationJobs)
+            self.assertTrue(isValid(manager._preparationRelay))
+            self.assertTrue(
+                all(job.cancelled.is_set() for job in manager._preparationJobs.values())
+            )
+            release.set()
+
+        try:
+            manager._startPreparationJob('import', {}, work)
+            self.assertTrue(started.wait(2))
+            manager._startPreparationJob('import', {}, lambda _: queuedStarted.set())
+            with mock.patch(
+                'Furious.Service.SubscriptionManager.logger.warning',
+                side_effect=afterWarning,
+            ) as warning:
+                manager.shutdown()
+                manager.shutdown()
+                warning.assert_called_once()
+
+            processQtEvents()
+            self.assertFalse(queuedStarted.is_set())
+            self.assertEqual(manager._preparationPool.activeThreadCount(), 0)
+            self.assertEqual(manager._preparationJobs, {})
+            self.assertEqual(manager._preparationPayloads, {})
+            manager._handleImportedResult.assert_not_called()
+        finally:
+            release.set()
+            manager.shutdown()
+            manager.deleteLater()
+            processQtEvents()
+
+    def testShutdownRejectsNewWorkAndVersionlessCompletions(self):
+        subscriptions = {'group-a': self._subscription()}
+        manager = self._manager(subscriptions)
+        manager.shutdown()
+        with mock.patch.object(Storage, 'persistSubscriptionGroups') as persist:
+            self.assertFalse(manager._isCurrentRequest({}))
+            self.assertIsNone(manager._startPreparationJob('import', {}, mock.Mock()))
+            with mock.patch.object(manager, 'webGET') as request:
+                manager.updateSubsByWebGET(webURL='https://invalid.test')
+                manager.updateSubscriptions(('group-a',))
+                request.assert_not_called()
+            with mock.patch.object(Storage, 'UserSubs', return_value=subscriptions):
+                manager.refreshAutoUpdates()
+            self.assertFalse(manager._autoUpdateTimers['group-a'].isActive())
+            persist.assert_not_called()
+        manager.deleteLater()
+        processQtEvents()
+
     def testPageNavigationIsPresentationOnlyForAutoUpdateScheduler(self):
         """Keep page show/hide cycles outside scheduler policy ownership."""
         subscriptions = {'group-a': self._subscription()}

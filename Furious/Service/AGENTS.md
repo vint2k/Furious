@@ -36,7 +36,10 @@ for lifetime primitives. This scope owns multi-stage workflows and temporary res
 - Subscription stages remain separate: decoders return neutral items; import constructs profiles/metadata;
   synchronization prepares one group reconciliation; the manager owns request/schedule generations and commits it.
   Worker-safe payload import and reconciliation preparation run in the manager's bounded pool over copied data;
-  unclassified plugin parsers stay on the GUI compatibility path. Workers never read live repositories or Qt models;
+  unclassified plugin parsers stay on the GUI compatibility path. The manager's synchronous shutdown closes
+  admission, cancels work, and retains the pool/relay until workers finish. A slow-shutdown warning is diagnostic,
+  not a deadline that permits destroying running workers; a non-returning plugin can still block shutdown.
+  Workers never read live repositories or Qt models;
   the GUI thread verifies the full source signature and group revision, commits while preserving live profile
   identity/local metadata, then publishes coalesced status/structure. Post-commit reconnect/test invalidation
   failure is reported without undoing the committed profiles. Here commit means live reconciliation; repository
