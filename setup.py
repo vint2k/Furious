@@ -36,7 +36,7 @@ setup(
     author=APPLICATION_AUTHOR_NAME,
     author_email=APPLICATION_AUTHOR_EMAIL,
     url=APPLICATION_ABOUT_PAGE,
-    packages=find_packages(),
+    packages=find_packages(include=('Furious', 'Furious.*')),
     package_data={'Furious': ['Data/**']},
     exclude_package_data={'Furious': ['Data/*.md', 'Data/**/*.md']},
     include_package_data=True,

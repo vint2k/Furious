@@ -55,7 +55,7 @@ Homepage = "https://github.com/LorenEteval/Furious"
 Furious = "Furious.__main__:main"
 
 [tool.setuptools]
-packages = { find = { } }
+packages = { find = { include = ["Furious", "Furious.*"] } }
 include-package-data = true
 
 [tool.setuptools.dynamic]
