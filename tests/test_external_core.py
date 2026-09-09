@@ -24,7 +24,7 @@ from Furious.Backends.ExternalCore.Plugin import (
     ExternalCorePlugin,
     ExternalCoreRuntimeFactory,
 )
-from Furious.Interface import CoreRuntime, RuntimeExit, RuntimeStartError
+from Furious.Interface import CoreRuntime, RuntimeExit, RuntimeStartError, RuntimeState
 from Furious.Plugins.API import (
     CoreRuntimeRequest,
     SubscriptionItem,
@@ -99,6 +99,89 @@ class ExternalCoreProcessTest(unittest.TestCase):
                 'shutdownTimeout': 1,
             }
         )
+
+    def testDisposedRuntimeCannotAcquireAnotherProcess(self):
+        """Disposal is terminal even when the stored launch specification is valid."""
+        runtime = ExternalCoreProcess(
+            self.configuration(['-c', 'pass'], str(Path.cwd()))
+        )
+        runtime.dispose()
+
+        try:
+            with mock.patch(
+                'Furious.Backends.ExternalCore.Process.subprocess.Popen'
+            ) as spawn:
+                with self.assertRaises(RuntimeStartError):
+                    runtime.start()
+
+                spawn.assert_not_called()
+        finally:
+            runtime.dispose()
+
+    def testPartialThreadStartupReapsChildAndClosesEveryPipe(self):
+        """A failed reader or watcher releases all earlier acquisitions."""
+        originalStart = threading.Thread.start
+        originalPopen = subprocess.Popen
+
+        for failAt in (1, 2, 3):
+            with self.subTest(failAt=failAt):
+                threads = []
+                children = []
+                runtime = ExternalCoreProcess(
+                    self.configuration(
+                        ['-u', '-c', 'import time; time.sleep(60)'], str(Path.cwd())
+                    )
+                )
+
+                def startThread(thread):
+                    threads.append(thread)
+
+                    if len(threads) == failAt:
+                        raise RuntimeError('thread startup fixture failure')
+
+                    originalStart(thread)
+
+                def spawn(*args, **kwargs):
+                    child = originalPopen(*args, **kwargs)
+                    children.append(child)
+                    return child
+
+                try:
+                    with mock.patch('threading.Thread.start', startThread), mock.patch(
+                        'Furious.Backends.ExternalCore.Process.subprocess.Popen',
+                        side_effect=spawn,
+                    ):
+                        with self.assertRaises(RuntimeStartError):
+                            runtime.start()
+
+                    child = children[0]
+
+                    self.assertIsNotNone(child.poll())
+                    self.assertTrue(child.stdout.closed)
+                    self.assertTrue(child.stderr.closed)
+                    self.assertTrue(all(not thread.is_alive() for thread in threads))
+
+                    self.assertIsNone(runtime.process)
+                    self.assertIsNone(runtime._watcherThread)
+                    self.assertFalse(runtime._readerThreads)
+                    self.assertIs(runtime.state, RuntimeState.Failed)
+                finally:
+                    for child in children:
+                        if child.poll() is None:
+                            child.kill()
+                        child.wait(timeout=5)
+
+                    for thread in threads:
+                        if thread.ident is not None:
+                            thread.join(5)
+
+                    for child in children:
+                        for stream in (child.stdout, child.stderr):
+                            if stream is not None:
+                                stream.close()
+
+                    runtime._watcherThread = None
+                    runtime.dispose()
 
     def testWindowsTaskkillHasBoundedWait(self):
         """Never allow the fully mocked host shutdown command to wait forever."""

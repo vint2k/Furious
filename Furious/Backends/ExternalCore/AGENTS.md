@@ -17,7 +17,9 @@ the intentionally different direct-subprocess scope for user-selected executable
 
 - One runtime owns its exact `Popen`, stdout/stderr pipes and readers, watcher, partial-line buffer, exit callback, and
   reaping path. Shutdown terminates that process, uses only platform-specific escalation for its PID when necessary,
-  kills as a last resort, joins readers, and remains bounded and idempotent after partial startup.
+  kills as a last resort, joins readers, and remains bounded and idempotent after partial startup. Register each
+  successfully started reader immediately; a later reader/watcher startup failure unwinds the child and every pipe,
+  including pipes with no reader. Disposal is terminal and must reject new process acquisition.
 - Keep execution liveness, configured proxy endpoints, and semantic readiness distinct. An immediate or later exit is
   interpreted once at this runtime boundary and retains actionable code/reason context for the shared startup workflow.
 - Application tun2socks is an explicit profile capability. It requires a usable SOCKS endpoint and a separate remote

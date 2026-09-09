@@ -181,8 +181,6 @@ class ExternalCoreProcess(CoreRuntime):
 
     def _startReaders(self, process: subprocess.Popen):
         """Start one bounded-lifetime reader for each captured output pipe."""
-        readers = []
-
         for stream, label in (
             (process.stdout, 'stdout'),
             (process.stderr, 'stderr'),
@@ -195,12 +193,11 @@ class ExternalCoreProcess(CoreRuntime):
                 args=(stream, label),
                 daemon=True,
             )
+
             thread.start()
 
-            readers.append(thread)
-
-        with self._lock:
-            self._readerThreads = readers
+            with self._lock:
+                self._readerThreads.append(thread)
 
     def _joinReaders(self, process: Optional[subprocess.Popen] = None):
         """Finish pipe readers, closing inherited pipes if descendants retain them."""
@@ -217,7 +214,7 @@ class ExternalCoreProcess(CoreRuntime):
 
         pending = tuple(thread for thread in readers if thread.is_alive())
 
-        if pending and process is not None:
+        if process is not None:
             for stream in (process.stdout, process.stderr):
                 if stream is None:
                     continue
@@ -262,7 +259,15 @@ class ExternalCoreProcess(CoreRuntime):
         with self._lock:
             self._watcherThread = watcher
 
-        watcher.start()
+        try:
+            watcher.start()
+        except Exception:
+            # Any non-exit exceptions
+
+            with self._lock:
+                self._watcherThread = None
+
+            raise
 
     @staticmethod
     def _creationOptions() -> dict:
@@ -285,6 +290,9 @@ class ExternalCoreProcess(CoreRuntime):
 
     def start(self):
         """Validate and launch execution or raise ``RuntimeStartError``."""
+        if self.state is RuntimeState.Disposed:
+            raise RuntimeStartError('Runtime has already been disposed')
+
         config = self._configuration
 
         if not isinstance(config, ConfigExternalCore):
@@ -366,8 +374,22 @@ class ExternalCoreProcess(CoreRuntime):
                 self._process = process
                 self.setState(RuntimeState.Alive)
 
-            self._startReaders(process)
-            self._startWatcher(process)
+            try:
+                self._startReaders(process)
+                self._startWatcher(process)
+            except Exception as ex:
+                # Any non-exit exceptions
+
+                try:
+                    self.stop()
+                except Exception:
+                    # Any non-exit exceptions
+
+                    logger.exception('failed to clean up partial external core startup')
+
+                self.setState(RuntimeState.Failed)
+
+                raise RuntimeStartError('Failed to start core', details=str(ex)) from ex
 
             logger.info(f'external core process started with PID {process.pid}')
 
