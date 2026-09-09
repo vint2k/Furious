@@ -21,11 +21,12 @@ from __future__ import annotations
 
 from Furious.Backends import OFFICIAL_PLUGIN_TYPES
 from Furious.Plugins import blankProfile, initializePluginRegistry
-from Furious.Qt import AppQDialog, connectWeakly
+from Furious.Qt import AppQDialog, AppQMessageBox, ThemeTransition, connectWeakly
 from Furious.Widget.ServerTableView import ServerTableView
 
 import PySide6
 
+from PySide6 import QtCore
 from PySide6.QtWidgets import QWidget
 
 from shiboken6 import isValid
@@ -221,6 +222,116 @@ def runProbe(
             registry.shutdown()
 
 
+class _SignalEndpoint(QtCore.QObject):
+    """Exercise compiled methods with independently destroyed Qt endpoints."""
+
+    emitted = QtCore.Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.calls = 0
+
+    def record(self):
+        self.calls += 1
+
+
+def runInfrastructureProbe(iterations=100):
+    """Check signal, mask, and animation ownership under real Qt destruction."""
+    application()
+    result = {}
+
+    for senderFirst in (True, False):
+        survivor = _SignalEndpoint()
+        counts = []
+
+        for _ in range(iterations):
+            transient = _SignalEndpoint()
+            sender, receiver = (
+                (transient, survivor) if senderFirst else (survivor, transient)
+            )
+
+            connectWeakly(sender.emitted, receiver, 'record', sender=sender)
+            sender.emitted.emit()
+
+            assert receiver.calls > 0
+
+            transient.deleteLater()
+            processQtEvents()
+
+            assert not isValid(transient)
+
+            survivor.emitted.emit()
+            counts.append(survivor.receivers(QtCore.SIGNAL('destroyed(QObject*)')))
+
+        assert counts == [counts[0]] * iterations, counts
+        result['senderFirst' if senderFirst else 'receiverFirst'] = iterations
+
+        survivor.deleteLater()
+        processQtEvents()
+
+    for windowFirst in (True, False):
+        for _ in range(iterations):
+            window = QWidget()
+            window.show()
+            processQtEvents()
+
+            transition = ThemeTransition(
+                duration=100000,
+                windowProvider=lambda: (window,),
+                animationsEnabled=lambda: True,
+            )
+
+            transition.apply(lambda: None)
+            animation = next(iter(transition._animations))
+            overlay = window.findChild(QWidget, transition.OverlayObjectName)
+
+            if windowFirst:
+                window.deleteLater()
+                processQtEvents()
+
+                assert not transition._animations
+                assert not transition._animationsByWindow
+
+                transition.deleteLater()
+            else:
+                transition.deleteLater()
+                processQtEvents()
+                window.deleteLater()
+
+            processQtEvents()
+
+            assert not isValid(animation)
+            assert not isValid(overlay)
+
+        result['themeWindowFirst' if windowFirst else 'themeCoordinatorFirst'] = (
+            iterations
+        )
+
+    owner = QWidget()
+    owner.show()
+    processQtEvents()
+
+    try:
+        for _ in range(iterations):
+            dialog = AppQMessageBox(parent=owner, text='Lifetime probe')
+            dialog.open()
+            mask = dialog._windowMask
+
+            dialog.deleteLater()
+            processQtEvents()
+
+            assert not isValid(dialog)
+            assert not isValid(mask)
+
+        assert not AppQDialog._openDialogs
+        result['messageBoxDeleted'] = iterations
+    finally:
+        owner.deleteLater()
+        processQtEvents()
+
+    return result
+
+
 def main():
     """Run the probe as a standalone source or Nuitka executable."""
     parser = argparse.ArgumentParser()
@@ -230,6 +341,8 @@ def main():
     )
     parser.add_argument('--close-method', choices=CLOSE_METHODS, default='reject')
     arguments = parser.parse_args()
+
+    print(json.dumps(runInfrastructureProbe(arguments.iterations), sort_keys=True))
 
     print(
         json.dumps(

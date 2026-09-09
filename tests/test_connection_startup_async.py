@@ -26,7 +26,7 @@ from Furious.Service.ConnectionManager import (
     ConnectionManager,
     ConnectionStartStage,
 )
-from Furious.Service.DnsResolver import DnsResolutionOperation
+from Furious.Service.DnsResolver import DnsResolutionOperation, DnsResolver
 
 from PySide6 import QtCore, QtNetwork
 
@@ -438,6 +438,48 @@ class ConnectionStartupAsyncTest(TestCase):
         self.assertEqual(runtime.startOptions, [{}])
         self.assertEqual(manager.runtimes, [runtime])
 
+    def testDnsCancellationAndTimeoutIgnoreAlreadyDestroyedReplies(self):
+        """Earlier recursive replies may be deleted before later requests stop."""
+
+        class PendingReply(QtNetwork.QNetworkReply):
+            def __init__(self):
+                super().__init__()
+                self.abortCount = 0
+
+            def abort(self):
+                self.abortCount += 1
+                self.setFinished(True)
+
+        for synchronous in (False, True):
+            with self.subTest(synchronous=synchronous):
+                resolver = mock.Mock()
+                resolver._newResultMap = DnsResolver._newResultMap
+                operation = DnsResolutionOperation(resolver, 'example.test')
+
+                completed = PendingReply()
+                pending = PendingReply()
+                operation._resultMap['reference'] = [completed, pending]
+                operation._resultMap['depth'] = 1
+
+                completed.deleteLater()
+                processQtEvents()
+
+                try:
+                    if synchronous:
+                        with self.assertLogs(
+                            'Furious.Service.DnsResolver', level='ERROR'
+                        ):
+                            DnsResolver.wait(operation._resultMap, timeout=0)
+                    else:
+                        operation.cancel()
+                        operation.cancel()
+
+                    self.assertEqual(pending.abortCount, 1)
+                finally:
+                    pending.deleteLater()
+                    operation.deleteLater()
+                    processQtEvents()
+
     def testDnsResolutionOperationCompletesAndCancelsWithoutNestedWait(self):
         """Observe recursive DNS state through timers and suppress stale cancel."""
         resolver = _ResolverFixture()
@@ -469,6 +511,7 @@ class ConnectionStartupAsyncTest(TestCase):
         processQtEvents(5)
 
         self.assertEqual(staleResults, [])
+
         operation.deleteLater()
         cancelled.deleteLater()
         resolver.deleteLater()

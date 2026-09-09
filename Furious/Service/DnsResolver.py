@@ -27,6 +27,8 @@ from Furious.Qt.Signals import connectWeakly
 from PySide6 import QtCore
 from PySide6.QtNetwork import *
 
+from shiboken6 import isValid
+
 from typing import Tuple
 
 import logging
@@ -104,6 +106,7 @@ class DnsResolutionOperation(QtCore.QObject):
         for networkReply in self._resultMap['reference']:
             if (
                 isinstance(networkReply, QNetworkReply)
+                and isValid(networkReply)
                 and not networkReply.isFinished()
             ):
                 networkReply.abort()
@@ -372,6 +375,7 @@ class DnsResolver(HttpGetManager):
             for networkReply in resultMap['reference']:
                 if (
                     isinstance(networkReply, QNetworkReply)
+                    and isValid(networkReply)
                     and not networkReply.isFinished()
                 ):
                     networkReply.abort()
@@ -379,7 +383,7 @@ class DnsResolver(HttpGetManager):
     def dispose(self):
         """Abort pending replies and schedule this resolver for destruction."""
         for networkReply in tuple(self._replyContexts):
-            if not networkReply.isFinished():
+            if isValid(networkReply) and not networkReply.isFinished():
                 networkReply.abort()
 
         self._replyContexts.clear()

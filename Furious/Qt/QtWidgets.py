@@ -1856,7 +1856,11 @@ class AppQMessageBox(AppQTransientDialog):
             return
 
         self._removeWindowMask()
+
         self._windowMask = _AppMessageBoxMask(owner)
+        # Native deletion can bypass done(); the window must not keep the mask.
+        self.destroyed.connect(self._windowMask.deleteLater)
+
         self._windowMask.show()
         self._windowMask.raise_()
 

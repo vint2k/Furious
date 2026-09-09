@@ -753,6 +753,7 @@ class ServerTableView(
         self.proxyModel = UserServersSortFilterProxyModel(parent=self)
         self.proxyModel.setSourceModel(self.sourceModel)
         self.setModel(self.proxyModel)
+
         self._sortSelectionSnapshot = None
         self.proxyModel.sortAboutToStart.connect(self._captureSortSelection)
         self.proxyModel.sortCompleted.connect(self._restoreSortSelection)
@@ -878,6 +879,7 @@ class ServerTableView(
         self._subscriptionActions = []
 
         self.importActions = tuple(importActionsFactory())
+
         self.testActions = (
             AppQAction(
                 _('Test Ping Latency'),

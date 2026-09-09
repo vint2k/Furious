@@ -87,6 +87,53 @@ class ThemeTransitionTest(unittest.TestCase):
             QtCore.Qt.FindChildOption.FindDirectChildrenOnly,
         )
 
+    def testWindowDestructionReleasesCoordinatorAnimationState(self):
+        """Deleting a target must not leave its stopped animation registered."""
+        windows = []
+        transition = self.createTransition(windows, duration=100000)
+
+        for _ in range(30):
+            window = QWidget()
+            window.show()
+            processQtEvents()
+
+            windows[:] = [window]
+
+            transition.apply(lambda: None)
+            animation = next(iter(transition._animations))
+
+            window.deleteLater()
+            processQtEvents()
+
+            self.assertFalse(isValid(animation))
+            self.assertEqual(transition._animations, {})
+            self.assertEqual(transition._animationsByWindow, {})
+
+    def testCoordinatorDestructionReleasesWindowOwnedOverlays(self):
+        """Destroying the animation owner must also remove its snapshots."""
+        window = self.createWindow()
+
+        for _ in range(30):
+            owner = QtCore.QObject()
+            transition = ThemeTransition(
+                owner,
+                duration=100000,
+                windowProvider=lambda: (window,),
+                animationsEnabled=lambda: True,
+            )
+
+            transition.apply(lambda: None)
+            overlays = self.overlays(window)
+
+            self.assertEqual(len(overlays), 1)
+
+            owner.deleteLater()
+            processQtEvents()
+
+            self.assertFalse(isValid(transition))
+            self.assertFalse(isValid(overlays[0]))
+            self.assertEqual(self.overlays(window), [])
+
     def testThemeIsAppliedImmediatelyThenSnapshotCompletesAndIsRemoved(self):
         """Keep destination state live beneath one real fading snapshot."""
         window = self.createWindow()

@@ -29,6 +29,8 @@ from Furious.Plugins import (
 from PySide6 import QtCore
 from PySide6.QtWidgets import QWidget
 
+from shiboken6 import isValid
+
 import logging
 
 __all__ = ['PluginNavigationManager', 'isCoreActive']
@@ -110,10 +112,10 @@ class PluginNavigationManager:
 
                 continue
 
-            if not isinstance(page, QWidget):
-                logger.error(f'plugin page {pageId!r} did not create a QWidget')
+            if not isinstance(page, QWidget) or not isValid(page):
+                logger.error(f'plugin page {pageId!r} did not create a valid QWidget')
 
-                if isinstance(page, QtCore.QObject):
+                if isinstance(page, QtCore.QObject) and isValid(page):
                     page.deleteLater()
 
                 continue
@@ -131,7 +133,8 @@ class PluginNavigationManager:
 
                 logger.error(f'failed to register plugin page {pageId!r}: {ex}')
 
-                page.deleteLater()
+                if isValid(page):
+                    page.deleteLater()
 
                 continue
 

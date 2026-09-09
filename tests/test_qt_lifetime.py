@@ -140,6 +140,23 @@ class DelayedReceiver(QtCore.QObject):
 class QtLifetimeTest(unittest.TestCase):
     """Stress direct destruction evidence without relying on process RSS alone."""
 
+    def testIndependentSenderDestructionReleasesReceiverCleanupHooks(self):
+        """A surviving receiver must not accumulate hooks for dead senders."""
+        receiver = DelayedReceiver([])
+        self.addCleanup(receiver.deleteLater)
+        counts = []
+
+        for _ in range(40):
+            sender = LongLivedEmitter()
+            connectWeakly(sender.emitted, receiver, 'record', sender=sender)
+
+            sender.deleteLater()
+            processQtEvents()
+
+            counts.append(receiver.receivers(QtCore.SIGNAL('destroyed(QObject*)')))
+
+        self.assertEqual(counts, [counts[0]] * len(counts))
+
     @classmethod
     def setUpClass(cls):
         """Create the one QApplication used by the entire test process."""
@@ -289,6 +306,30 @@ class QtLifetimeTest(unittest.TestCase):
 
         self.assertTrue(waitFor(lambda: reference() is None))
         self.assertNotIn(key, AppQMainWindow._openWindows)
+
+    def testNativeMessageBoxDestructionReleasesItsWindowMask(self):
+        """Direct Qt deletion must release a mask parented to a surviving window."""
+        owner = QWidget()
+        owner.show()
+        processQtEvents()
+
+        try:
+            for _ in range(30):
+                messageBox = AppQMessageBox(parent=owner, text='Lifetime probe')
+                messageBox.open()
+                mask = messageBox._windowMask
+
+                self.assertIsNotNone(mask)
+
+                messageBox.deleteLater()
+                processQtEvents()
+
+                self.assertFalse(isValid(messageBox))
+                self.assertFalse(isValid(mask))
+                self.assertEqual(owner.findChildren(_AppMessageBoxMask), [])
+        finally:
+            owner.deleteLater()
+            processQtEvents()
 
     def testMessageBoxAndParentMaskHaveTransientOwnership(self):
         """Remove every parent event filter/mask over repeated modal presentation."""

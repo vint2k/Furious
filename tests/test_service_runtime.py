@@ -37,7 +37,7 @@ from PySide6.QtWidgets import QWidget
 
 from shiboken6 import isValid
 
-from tests.support import application, collectAtBoundary, waitFor
+from tests.support import processQtEvents, application, collectAtBoundary, waitFor
 
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -259,6 +259,31 @@ class PluginNavigationManagerTest(unittest.TestCase):
         """Create the process-wide headless QApplication."""
         application()
 
+    def testDestroyedFactoryResultsAreRejectedBeforeRegistration(self):
+        """A retained Python wrapper is not proof of a valid plugin page."""
+        for pageType in (QtCore.QObject, QWidget):
+            with self.subTest(pageType=pageType):
+                page = pageType()
+                page.deleteLater()
+                processQtEvents()
+
+                provider = _NavigationProvider()
+                provider._invalidPage = lambda parent=None: page
+                host = _NavigationHost()
+                manager = PluginNavigationManager(_NavigationRegistry(provider))
+
+                try:
+                    with self.assertLogs(
+                        'Furious.Service.PluginUIManager', level='ERROR'
+                    ):
+                        pages = manager.registerPages(host)
+
+                    self.assertEqual(len(pages), 1)
+                    self.assertEqual(len(host.registrations), 1)
+                finally:
+                    host.deleteLater()
+                    processQtEvents()
+
     def testRegistrationIsIdempotentAndDeletesInvalidQObject(self):
         """Construct each descriptor once and destroy rejected Qt objects."""
         provider = _NavigationProvider()
@@ -296,7 +321,12 @@ class ConnectivityManagerTest(unittest.TestCase):
         reply = object()
         manager._testingEnabled = True
 
-        with patch.object(manager, 'webGET', return_value=reply) as webGet:
+        with (
+            patch.object(manager, 'webGET', return_value=reply) as webGet,
+            patch(
+                'Furious.Service.ConnectivityManager.AppSettings.get', return_value=None
+            ),
+        ):
             manager.startSingleTest()
             manager.startSingleTest()
 

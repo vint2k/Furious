@@ -146,15 +146,19 @@ def connectWeakly(
         and not _ownsQObject(receiver, sender)
     ):
 
-        def disconnect(*_args):
-            """Remove weak dispatch from an independently owned sender."""
-            # Retain only Qt's opaque connection handle. Capturing ``signal``
-            # here keeps the sender's SignalInstance wrapper alive until the
-            # receiver dies; when the native sender died first, PySide6 could
-            # then access that stale wrapper during application teardown.
-            QtCore.QObject.disconnect(connection)
+        connections = [connection]
 
-        receiver.destroyed.connect(disconnect)
+        def disconnect(*_args):
+            """Release dispatch and both cleanup hooks when either endpoint dies."""
+            # Keep only opaque handles, never SignalInstance wrappers or QObjects.
+            # Removing both hooks also bounds retention when senders die first.
+            for ownedConnection in connections:
+                QtCore.QObject.disconnect(ownedConnection)
+
+            connections.clear()
+
+        connections.append(receiver.destroyed.connect(disconnect))
+        connections.append(sender.destroyed.connect(disconnect))
 
     return connection
 

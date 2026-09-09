@@ -273,10 +273,12 @@ connectWeakly(
   `QObject.sender()`;
 - `_ownsQObject(receiver, sender)` walks from the sender through its `parent()` chain;
 - when that walk shows that the sender is not the receiver or its descendant,
-  `sender=` makes receiver destruction disconnect the otherwise dormant dispatcher;
-- that cleanup captures only the opaque connection returned by `signal.connect()` and
-  calls `QtCore.QObject.disconnect(connection)`; it deliberately does not capture the
-  sender's `SignalInstance`, which may wrap an already-deleted sender during teardown;
+  `sender=` makes either endpoint's destruction release dispatch and both cleanup hooks;
+- that cleanup captures only opaque connection handles and calls
+  `QtCore.QObject.disconnect(connection)`; it deliberately does not capture either
+  QObject or the sender's `SignalInstance`, which may wrap an already-deleted sender;
+- releasing both cleanup hooks prevents short-lived senders from accumulating callbacks
+  on a surviving receiver; verify both destruction orders over repeated cycles;
 - the method name is static and must remain valid for the receiver's lifetime.
 
 Pass the sender whenever it is outside the receiver's QObject subtree. Omitting it can
@@ -338,8 +340,10 @@ UI objects may observe controller state. Controllers should not become accidenta
 Long-running resources belong to the service that schedules them, not to a transient
 page callback. Furious's current profile-test and subscription services parent their
 manager-side QObjects/pools to durable owners, cross worker results back to the owning
-Qt thread, reject stale generations/identities, and provide bounded idempotent
-shutdown. Preserve that ownership shape when moving work off the GUI thread.
+Qt thread, and reject stale generations/identities. Their shutdown is idempotent, but
+not uniformly bounded: subscription preparation drains cooperatively and waits
+synchronously after its diagnostic timeout. Preserve ownership until workers finish;
+do not confuse a diagnostic timeout with a termination deadline.
 
 ## 12. Plugin and Registry Design
 

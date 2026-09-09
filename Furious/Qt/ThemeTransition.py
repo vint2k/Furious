@@ -180,6 +180,11 @@ class ThemeTransition(QtCore.QObject):
                 b'opacityValue',
                 self,
             )
+
+            # The snapshot belongs to the window, but must also die if its
+            # animation owner is destroyed early. This is a native Qt slot.
+            animation.destroyed.connect(overlay.deleteLater)
+
             animation.setDuration(self._duration)
             animation.setStartValue(1.0)
             animation.setEndValue(0.0)
@@ -198,6 +203,13 @@ class ThemeTransition(QtCore.QObject):
                 forwardSender=True,
             )
 
+            connectWeakly(
+                overlay.destroyed,
+                self,
+                '_releaseDestroyedOverlays',
+                sender=overlay,
+            )
+
             overlay.show()
             overlay.raise_()
 
@@ -208,6 +220,12 @@ class ThemeTransition(QtCore.QObject):
 
         for animation in tuple(self._animations):
             animation.start()
+
+    def _releaseDestroyedOverlays(self):
+        """Native target destruction stops animations without emitting finished."""
+        for animation, (_window, overlay) in tuple(self._animations.items()):
+            if not isValid(overlay):
+                self._releaseAnimation(animation)
 
     def _releaseAnimation(self, animation, *, notify=True):
         """Release one animation and its transient overlay exactly once."""
