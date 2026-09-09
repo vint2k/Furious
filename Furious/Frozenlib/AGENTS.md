@@ -14,10 +14,11 @@ for unrelated application orchestration to accumulate in a broad helper namespac
 - Keep proxy, DNS, routing, TUN, startup registration, session callbacks, external commands, and platform detection here
   or behind a runtime boundary so tests can replace them completely. Windows, macOS, Linux, Flatpak, AppImage, and older
   platform paths are distinct capabilities; never generalize from the current host.
-- Check each helper's real result contract. Startup registration and some routing helpers return Booleans; System
-  Proxy set/off currently log failures and return no success value. Script-mode startup registration intentionally
-  does nothing. Do not infer confirmed host state from absence of an exception or generalize one helper's semantics
-  to all. New mutation APIs should report actionable success/failure to the owning controller/service.
+- Check each helper's real result contract. System Proxy set/off/pac return True for reported host success, False for
+  failure, and None when policy deliberately leaves host settings unchanged. Startup registration and some routing
+  helpers return Booleans; script-mode startup registration intentionally does nothing. Preserve these distinctions
+  at callers instead of treating absence of an exception as confirmed host state. Check every native command result,
+  including each enabled macOS network service, and bound host-command waits at this boundary.
 - Prefer argument vectors over shell strings. Each caller owns any responsiveness/cleanup timeout appropriate to its
   context; build-time commands and GUI-time host mutation do not share one universal timeout policy.
 - Windows proxy calls, Linux desktop settings/host bridging, and macOS network-service operations are distinct

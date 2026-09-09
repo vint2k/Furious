@@ -13,7 +13,7 @@ transitions. Services own execution resources; existing prompts are presentation
   exposed during `Connecting`; successful runtime commit precedes System Proxy setup and `Connected`. Failure resets
   the active profile. Disconnect/reconnect cancels the exact in-flight generation and ignores stale completion.
 - Preserve state and signal ordering, interaction gating, the exact selected `ServerProfile`, runtime snapshots,
-  reconnect preference, and rollback after validation, runtime, TUN, System Proxy, cancellation, or unexpected-exit
+  reconnect preference, and rollback after validation, runtime, TUN, System Proxy exceptions, cancellation, or unexpected-exit
   failure. Worker/native callbacks cross to the controller’s Qt thread before transition.
 - The active live profile is not the prepared document used by an already-started runtime. Resolve identity and
   generation before changing state or host effects, and preserve typed runtime failures; cancellation and supersession
@@ -25,9 +25,9 @@ transitions. Services own execution resources; existing prompts are presentation
 - `SettingsController` is the shared policy path used by Home, Settings, tray, and platform integration. Startup
   registration persists only after host success; other preferences may apply immediately or on the next connection.
   Preserve each setting's actual application timing instead of imposing one transaction order on all preferences.
-- System Proxy helpers currently log some host failures without raising. Controller exception-path tests prove
-  recovery when an error reaches the controller, not that every OS failure is propagated. Keep desired proxy mode
-  distinct from observed host state when evolving this boundary.
+- System Proxy configuration is best effort. Its helper logs host failures; an explicit False return does not roll
+  back an otherwise usable committed runtime or prevent Connected. Preserve exception-path recovery separately.
+  Exercise actual helper results with mocked OS boundaries; Connected does not guarantee the OS proxy was applied.
 
 ## Verification and evolution
 

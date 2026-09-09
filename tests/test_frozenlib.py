@@ -431,6 +431,112 @@ class FrozenlibUtilityTest(unittest.TestCase):
 class MockedPlatformHelperTest(unittest.TestCase):
     """Exercise platform helpers without touching host startup or networking."""
 
+    def testProxyMutationsReturnHostFailureWithoutDisclosingSecrets(self):
+        """Preserve false results from each native boundary for callers to handle."""
+        proxy = SystemProxyModule._SystemProxy()
+        native = types.SimpleNamespace(
+            set=mock.Mock(return_value=False),
+            off=mock.Mock(return_value=False),
+            pac=mock.Mock(return_value=False),
+        )
+
+        for platform in ('Windows', 'Linux', 'Darwin'):
+            with self.subTest(platform=platform), mock.patch.object(
+                SystemProxyModule, 'PLATFORM', platform
+            ), mock.patch.object(
+                SystemProxyModule, 'handleAppSystemProxyMode', return_value=True
+            ), mock.patch.dict(
+                sys.modules, {'sysproxy': native}
+            ), mock.patch.object(
+                SystemProxyModule,
+                'linuxProxyConfig',
+                side_effect=OSError('private-token'),
+            ), mock.patch.object(
+                SystemProxyModule,
+                'darwinProxyConfig',
+                side_effect=OSError('private-token'),
+            ), self.assertLogs(
+                SystemProxyModule.logger, level='ERROR'
+            ) as captured:
+                self.assertIs(proxy.set('127.0.0.1:10809', 'localhost'), False)
+                self.assertIs(proxy.off(), False)
+                self.assertIs(proxy.pac('https://invalid.test/private-token'), False)
+
+            self.assertNotIn('private-token', '\n'.join(captured.output))
+
+    def testIgnoredProxyMutationsDoNotTouchHost(self):
+        """Do-not-change remains a deliberate no-op rather than a failed mutation."""
+        with mock.patch.object(
+            SystemProxyModule, 'handleAppSystemProxyMode', return_value=False
+        ), mock.patch.object(SystemProxyModule, 'runExternalCommand') as command:
+            self.assertIsNone(SystemProxyModule.SystemProxy.set('127.0.0.1:10809', ''))
+            self.assertIsNone(SystemProxyModule.SystemProxy.off())
+            self.assertIsNone(SystemProxyModule.SystemProxy.pac('https://invalid.test'))
+
+            command.assert_not_called()
+
+    def testDarwinProxyChecksEveryEnabledServiceCommand(self):
+        """Check enabled services and propagate even a later service rejection."""
+        for fail in (False, True):
+            commands = []
+
+            def run(command, **kwargs):
+                commands.append(command)
+
+                self.assertTrue(kwargs.get('check'))
+                self.assertEqual(kwargs.get('timeout'), 5.0)
+
+                if '-listallnetworkservices' in command:
+                    return subprocess.CompletedProcess(
+                        command,
+                        0,
+                        stdout=b'Header\nWi-Fi\n*Disabled service\nEthernet\n',
+                    )
+
+                if fail and 'Ethernet' in command:
+                    raise subprocess.CalledProcessError(1, command)
+
+                return subprocess.CompletedProcess(command, 0)
+
+            with self.subTest(fail=fail), mock.patch.object(
+                SystemProxyModule, 'runExternalCommand', side_effect=run
+            ):
+                if fail:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        SystemProxyModule.darwinProxyConfig(
+                            'setwebproxy', '127.0.0.1', '10809'
+                        )
+                else:
+                    SystemProxyModule.darwinProxyConfig(
+                        'setwebproxy', '127.0.0.1', '10809'
+                    )
+
+                self.assertEqual(
+                    [command[2] for command in commands[1:]], ['Wi-Fi', 'Ethernet']
+                )
+
+    def testLinuxProxyCommandTimeoutBecomesExplicitFailure(self):
+        """A hung host settings command has a deadline and cannot claim success."""
+        with (
+            mock.patch.object(SystemProxyModule, 'PLATFORM', 'Linux'),
+            mock.patch.object(
+                SystemProxyModule, 'handleAppSystemProxyMode', return_value=True
+            ),
+            mock.patch.object(
+                SystemProxyModule.SystemRuntime, 'flatpakID', return_value=''
+            ),
+            mock.patch.object(
+                SystemProxyModule,
+                'runExternalCommand',
+                side_effect=subprocess.TimeoutExpired('gsettings', 5.0),
+            ) as command,
+            self.assertLogs(SystemProxyModule.logger, level='ERROR'),
+        ):
+            self.assertIs(SystemProxyModule.SystemProxy.off(), False)
+
+            self.assertTrue(command.call_args.kwargs['check'])
+            self.assertEqual(command.call_args.kwargs['timeout'], 5.0)
+
     def testPacDiagnosticsDoNotExposeConfiguredUrl(self):
         """Avoid logging credential-bearing PAC URLs on any outcome."""
         proxy = SystemProxyModule._SystemProxy()

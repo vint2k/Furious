@@ -33,6 +33,8 @@ __all__ = ['SystemProxy']
 
 logger = logging.getLogger(__name__)
 
+HOST_PROXY_COMMAND_TIMEOUT = 5.0
+
 
 def handleAppSystemProxyMode() -> bool:
     """Handle app system proxy mode."""
@@ -68,6 +70,7 @@ def linuxProxyConfig(proxy_args, arg0, arg1):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         check=True,
+        timeout=HOST_PROXY_COMMAND_TIMEOUT,
     )
 
 
@@ -81,6 +84,7 @@ def darwinProxyConfig(operation, *args):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
+            timeout=HOST_PROXY_COMMAND_TIMEOUT,
         )
 
         # Replace with command.stdout.decode('utf-8', 'replace')...?
@@ -89,13 +93,20 @@ def darwinProxyConfig(operation, *args):
         return service[1:]
 
     for serviceName in getNetworkServices():
+        if serviceName.startswith('*'):
+            continue
+
         runExternalCommand(
             [
                 'networksetup',
                 f'-{operation}',
                 serviceName,
                 *args,
-            ]
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+            timeout=HOST_PROXY_COMMAND_TIMEOUT,
         )
 
 
@@ -166,14 +177,18 @@ class _SystemProxy:
 
             return
 
-        if _pac():
+        success = bool(_pac())
+
+        if success:
             logger.info('set proxy PAC success')
         else:
             logger.error('set proxy PAC failed')
 
+        return success
+
     @staticmethod
     def set(server, bypass):
-        """Set data managed by the system proxy."""
+        """Return host success/failure, or None when policy deliberately ignores it."""
 
         def _set():
             """Return the set value used by the system proxy."""
@@ -226,10 +241,14 @@ class _SystemProxy:
 
             return
 
-        if _set():
+        success = bool(_set())
+
+        if success:
             logger.info(f'set proxy server {server} success')
         else:
             logger.error(f'set proxy server {server} failed')
+
+        return success
 
     @staticmethod
     def off():
@@ -274,10 +293,14 @@ class _SystemProxy:
 
             return
 
-        if _off():
+        success = bool(_off())
+
+        if success:
             logger.info('turn off proxy success')
         else:
             logger.error('turn off proxy failed')
+
+        return success
 
     def daemonOn_(self):
         """Return the daemon on value used by the system proxy."""
@@ -309,6 +332,8 @@ class _SystemProxy:
                         try:
                             thread.start()
                         except Exception:
+                            # Any non-exit exceptions
+
                             if self._daemonThread is thread:
                                 self._daemonThread = None
 

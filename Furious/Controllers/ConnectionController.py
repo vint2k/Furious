@@ -76,6 +76,8 @@ def validateProxyServer(server) -> bool:
         if int(port) < 0 or int(port) > 65535:
             raise ValueError
     except Exception:
+        # Any non-exit exceptions
+
         return False
 
     return True
@@ -382,6 +384,8 @@ class ConnectionController(QtCore.QObject):
         )
 
         try:
+            # System proxy setup is best effort; the helper logs host failures.
+            # Ignore even False so an otherwise usable core stays connected.
             SystemProxy.set(httpProxy, proxyServerBypass)
         except Exception as ex:
             # Any non-exit exceptions
@@ -515,6 +519,8 @@ class ConnectionController(QtCore.QObject):
             try:
                 self._actionQueue.get_nowait()
             except Exception:
+                # Any non-exit exceptions
+
                 pass
 
         Mixins.ConnectionAware.callDisconnectedCallback()

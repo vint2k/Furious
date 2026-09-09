@@ -35,6 +35,7 @@ from PySide6 import QtCore
 from tests.support import application, isolatedSettings, processQtEvents
 
 import unittest
+import importlib
 
 from types import SimpleNamespace
 from unittest import mock
@@ -497,6 +498,51 @@ class ConnectionControllerTest(unittest.TestCase):
             self.assertEqual(core.cancelCalls, [first])
 
             controller.deleteLater()
+
+    def testActualProxyHelperFailurePreservesCommittedStartup(self):
+        """Keep a usable core connected when best-effort system proxy setup fails."""
+        proxyModule = importlib.import_module('Furious.Frozenlib.SystemProxy')
+
+        for asynchronous in (False, True):
+            with self.subTest(asynchronous=asynchronous), isolatedSettings():
+                core = (
+                    FixtureAsyncCoreManager() if asynchronous else FixtureCoreManager()
+                )
+                controller = ConnectionController(
+                    coreManager=core, updatesManager=FixtureUpdatesManager()
+                )
+                self.addCleanup(controller.deleteLater)
+
+                states = []
+                errors = []
+
+                controller.stateChanged.connect(states.append)
+                controller.errorOccurred.connect(errors.append)
+
+                with mock.patch.object(
+                    proxyModule, 'PLATFORM', 'Linux'
+                ), mock.patch.object(
+                    proxyModule, 'handleAppSystemProxyMode', return_value=True
+                ), mock.patch.object(
+                    proxyModule,
+                    'linuxProxyConfig',
+                    side_effect=OSError('host rejected operation'),
+                ), mock.patch.object(
+                    controller, '_runPostConnectTasksOnce'
+                ) as postConnect:
+                    self.assertTrue(controller.startConnection(self.profile))
+
+                    if asynchronous:
+                        core.operations[0][0].succeed()
+
+                    processQtEvents()
+
+                    self.assertEqual(controller.state, ConnectionState.Connected)
+                    self.assertEqual(states.count(ConnectionState.Connected), 1)
+                    self.assertIs(controller.activeProfile, self.profile)
+                    self.assertEqual(core.stopCalls, 0)
+                    self.assertEqual(errors, [])
+                    postConnect.assert_called_once()
 
     def testStartAndProxyExceptionsReturnToStableDisconnectedState(self):
         """Clean every partially acquired resource after injected failures."""
