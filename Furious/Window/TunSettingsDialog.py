@@ -229,8 +229,21 @@ class GuiTUNSettingsGroupBoxBasic(GuiEditorWidgetQGroupBox):
         addPair(3, 1, 2)
 
         layout.addRow(pairsLayout)
-        layout.addRow(*self._containers[4].widgets())
-        layout.addRow(*self._containers[5].widgets())
+
+        # Original implementation: both controls share the same label column.
+        # layout.addRow(*self._containers[4].widgets())
+        # layout.addRow(*self._containers[5].widgets())
+
+        # Use independent rows so the longer DNS label does not shift the bypass input.
+        for container in self._containers[4:6]:
+            rowLayout = QFormLayout()
+            rowLayout.setFieldGrowthPolicy(
+                QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+            )
+            rowLayout.addRow(*container.widgets())
+
+            layout.addRow(rowLayout)
+
         layout.addRow(*self._containers[6].widgets())
 
         return layout
