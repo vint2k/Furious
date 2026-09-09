@@ -126,6 +126,6 @@ jobs:
         with:
           identifier: LorenEteval.Furious
           release-tag: ${{ github.ref_name }}
-          installers-regex: '^Furious-.*-(?:windows7-amd64|windows10-arm64)\.zip$'
+          installers-regex: '^Furious-.*-windows10-(?:amd64|arm64)\.zip$'
           max-versions-to-keep: 5
           token: ${{ secrets.WINGET_TOKEN }}
