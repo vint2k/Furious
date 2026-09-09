@@ -85,7 +85,7 @@ SUBSCRIPTION_PROXY_OPTIONS = (
     'No proxy',
 )
 
-SUBSCRIPTION_USERINFO_HEADER = b'Subscription-Userinfo'
+SUBSCRIPTION_USERINFO_HEADER = 'Subscription-Userinfo'
 SUBSCRIPTION_USERINFO_KEYS = ('upload', 'download', 'total', 'expire')
 MAXIMUM_SUBSCRIPTION_USERINFO_LENGTH = 4096
 MAXIMUM_SUBSCRIPTION_USERINFO_VALUE = (1 << 63) - 1
@@ -728,6 +728,7 @@ class SubscriptionManager(HttpGetManager):
 
         if successful is not None:
             state.successful.append(successful)
+
         if failed is not None and self._isCurrentRequest(context):
             state.failed.append(failed)
 

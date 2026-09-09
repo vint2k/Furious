@@ -36,7 +36,7 @@ from Furious.Widget.SubscriptionTableView import SubscriptionTableView
 
 from tests.support import application, processQtEvents
 
-from PySide6 import QtCore, QtTest, QtWidgets
+from PySide6 import QtCore, QtNetwork, QtTest, QtWidgets
 
 from shiboken6 import isValid
 
@@ -44,34 +44,30 @@ from types import SimpleNamespace
 from unittest import TestCase, mock
 
 
-class _Payload:
-    """Expose the minimal QNetworkReply byte-array contract."""
-
-    def __init__(self, value):
-        self._value = value
-
-    def data(self):
-        return self._value
-
-
-class _Reply:
-    """Provide deterministic response data and failure diagnostics."""
+class _Reply(QtNetwork.QNetworkReply):
+    """Supply in-memory data while preserving Qt's real header API contract."""
 
     def __init__(self, value=b'', error='request failed', headers=None):
+        super().__init__()
+
         self._value = value
         self._error = error
-        self._headers = {
-            bytes(name).lower(): value for name, value in (headers or {}).items()
-        }
 
-    def readAll(self):
-        return _Payload(self._value)
+        for name, headerValue in (headers or {}).items():
+            self.setRawHeader(name, headerValue)
+
+        self.open(QtCore.QIODevice.OpenModeFlag.ReadOnly)
+
+    def readData(self, maxSize):
+        data, self._value = self._value[:maxSize], self._value[maxSize:]
+
+        return data
 
     def errorString(self):
         return self._error
 
-    def rawHeader(self, name):
-        return self._headers.get(bytes(name).lower(), b'')
+    def abort(self):
+        self.close()
 
 
 class _AbortableReply:
@@ -1488,14 +1484,17 @@ class SubscriptionManagerTest(TestCase):
             manager = SubscriptionManager()
             timer = manager._autoUpdateTimers['group-a']
             timerId = timer.timerId()
+
             manager.refreshAutoUpdates = mock.Mock(
                 side_effect=AssertionError(
                     'page presentation must not reconcile background schedules'
                 )
             )
+
             serverTable = SimpleNamespace(subsManager=manager)
             page = SubscriptionPage(serverTable)
             placeholder = QtWidgets.QWidget()
+
             stack = QtWidgets.QStackedWidget()
             stack.addWidget(page)
             stack.addWidget(placeholder)
