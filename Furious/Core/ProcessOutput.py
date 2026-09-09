@@ -76,6 +76,8 @@ class MsgQueue(multiprocessing.queues.Queue):
         try:
             return self.get_nowait()
         except Exception:
+            # Any non-exit exceptions
+
             return ''
 
     def getTimeout(self) -> int:

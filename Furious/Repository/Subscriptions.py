@@ -187,7 +187,10 @@ class UserSubs(Mixins.CleanupOnExit, StorageBackend):
 
                 raise TypeError('subscription repository root must be an object')
             except Exception:
+                # Any non-exit exceptions
+
                 self._restoreFailed = True
+
                 logger.exception('failed to restore persisted subscriptions')
 
                 return {}

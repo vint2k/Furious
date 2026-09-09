@@ -58,6 +58,8 @@ def _currentTheme():
             try:
                 return AppStyleSheet.normalizeTheme(themeGetter())
             except Exception:
+                # Any non-exit exceptions
+
                 # A partially initialized application falls back to the safe default.
                 pass
 

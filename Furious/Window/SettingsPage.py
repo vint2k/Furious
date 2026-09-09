@@ -1094,6 +1094,8 @@ class SettingsPage(Mixins.QTranslatable, QMainWindow):
                     for section in sections:
                         self._addPluginDescriptorSection(section)
                 except Exception as ex:
+                    # Any non-exit exceptions
+
                     logger.error(
                         f'failed to create settings from plugin '
                         f'{metadata.id!r}: {ex}'
@@ -1103,6 +1105,8 @@ class SettingsPage(Mixins.QTranslatable, QMainWindow):
                 try:
                     self._addPluginActionSection(plugin, metadata, registry)
                 except Exception as ex:
+                    # Any non-exit exceptions
+
                     logger.error(
                         f'failed to create management settings from plugin '
                         f'{metadata.id!r}: {ex}'

@@ -173,7 +173,7 @@ class XrayAssetListView(Mixins.ThemeAware, AppQListView):
                 # Same file imported. Do nothing
                 pass
             except Exception as ex:
-                # Any non-exit exception
+                # Any non-exit exceptions
 
                 _mbox = AppQMessageBox(icon=AppQMessageBox.Icon.Critical)
                 _mbox.setText(_('Error import asset file'))

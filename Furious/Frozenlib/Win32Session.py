@@ -129,6 +129,8 @@ class _Win32Session:
                 try:
                     thread.start()
                 except Exception:
+                    # Any non-exit exceptions
+
                     if self._daemonThread is thread:
                         self._daemonThread = None
 

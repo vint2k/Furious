@@ -136,7 +136,10 @@ class UserServers(Mixins.CleanupOnExit, StorageBackend):
 
                 raise TypeError('server repository root must contain a model list')
             except Exception:
+                # Any non-exit exceptions
+
                 self._restoreFailed = True
+
                 logger.exception('failed to restore persisted server configurations')
 
                 return {'model': []}

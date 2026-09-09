@@ -76,6 +76,8 @@ class PluginNavigationManager:
                 try:
                     descriptors = tuple(provider.pageDescriptors())
                 except Exception as ex:
+                    # Any non-exit exceptions
+
                     logger.error(
                         f'plugin navigation provider '
                         f'{provider.capabilityId!r} failed: {ex}'
@@ -102,6 +104,8 @@ class PluginNavigationManager:
             try:
                 page = descriptor.factory(parent=navigationView)
             except Exception as ex:
+                # Any non-exit exceptions
+
                 logger.error(f'failed to create plugin page {pageId!r}: {ex}')
 
                 continue
@@ -123,6 +127,8 @@ class PluginNavigationManager:
                     translatable=descriptor.translatable,
                 )
             except Exception as ex:
+                # Any non-exit exceptions
+
                 logger.error(f'failed to register plugin page {pageId!r}: {ex}')
 
                 page.deleteLater()

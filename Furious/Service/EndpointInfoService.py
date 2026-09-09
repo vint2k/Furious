@@ -265,11 +265,13 @@ class EndpointInfoService(QtCore.QObject):
         self.controller = controller or AppConnectionController()
         self.httpClient = httpClient or ProxyEndpointHttpClient(self)
         self.proxyResolver = proxyResolver or Storage.Extras.UserHttpProxy
+
         self._enabled = (
             AppSettings.isStateON_(PROXY_ENDPOINT_INFO_SETTING)
             if enabled is None
             else bool(enabled)
         )
+
         self.state = EndpointInfoState.Disabled
         self.result = EndpointInfo()
         self._generation = 0
@@ -578,6 +580,8 @@ class EndpointInfoService(QtCore.QObject):
                 organization=str(payload.get('org') or '').strip(),
             )
         except Exception as ex:
+            # Any non-exit exceptions
+
             logger.warning(f'approximate endpoint geolocation failed: {ex}')
 
         self._publishResult(

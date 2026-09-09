@@ -396,6 +396,7 @@ class GenerationLogManagerContractTest(unittest.TestCase):
     def testSeededModelBasedStateMachine(self):
         """Compare arbitrary public transitions to a flat reference model."""
         seeds = (0, 1, 7, 19, 41, 97, 313, 997)
+
         for seed in seeds:
             with self.subTest(seed=seed):
                 randomizer = random.Random(seed)
@@ -407,6 +408,7 @@ class GenerationLogManagerContractTest(unittest.TestCase):
 
                 for operationIndex in range(350):
                     operation = randomizer.randrange(100)
+
                     try:
                         if operation < 66:
                             categoryId = randomizer.choice(categories)
@@ -414,6 +416,7 @@ class GenerationLogManagerContractTest(unittest.TestCase):
                                 ('', 'x', 'line\n', '😀é', '\0', 'z' * 93)
                             )
                             history.append(('append', categoryId, len(message)))
+
                             self.appendBoth(manager, model, message, categoryId)
                         elif operation < 73:
                             categoryId = randomizer.choice(categories)
@@ -1028,30 +1031,41 @@ class GenerationLogManagerContractTest(unittest.TestCase):
                     autoClearEnabled=False,
                 )
                 manager.RetiredCleanupBudget = 64
+
                 for index in range(size):
                     manager.append(f'entry {index}', CORE_LOG_CATEGORY)
+
                 historical = manager.entries(CORE_LOG_CATEGORY)
                 self.assertEqual(len(historical), size)
+
                 references = tuple(weakref.ref(entry) for entry in historical)
                 externallyOwned = historical[-1]
+
                 manager.clear(runtimeOnly=True)
+
                 self.assertTrue(
                     all(reference() is not None for reference in references)
                 )
+
                 while manager.retiredEntryCount:
                     with manager._lock:
                         manager._cleanupRetiredLocked()
+
                 self.assertTrue(
                     all(reference() is not None for reference in references)
                 )
+
                 del historical
                 gc.collect()
+
                 self.assertTrue(
                     all(reference() is None for reference in references[:-1])
                 )
                 self.assertIs(references[-1](), externallyOwned)
+
                 del externallyOwned
                 gc.collect()
+
                 self.assertIsNone(references[-1]())
 
     def testRetentionThreeWayMergeAndLargeSequences(self):
@@ -1195,9 +1209,11 @@ class GenerationLogManagerContractTest(unittest.TestCase):
 
         def observedGeneration(category):
             generation = original(category)
+
             if threading.get_ident() in appendThreadId and not selected.is_set():
                 selected.set()
                 self.assertTrue(release.wait(5))
+
             return generation
 
         manager._generationForCategoryLocked = observedGeneration
@@ -1205,6 +1221,7 @@ class GenerationLogManagerContractTest(unittest.TestCase):
 
         def append():
             appendThreadId.append(threading.get_ident())
+
             try:
                 manager.append('racing', CORE_LOG_CATEGORY)
             except Exception as error:
@@ -1212,14 +1229,18 @@ class GenerationLogManagerContractTest(unittest.TestCase):
 
         producer = threading.Thread(target=append)
         clearer = threading.Thread(target=lambda: manager.clear(runtimeOnly=True))
+
         producer.start()
         self.assertTrue(selected.wait(5))
+
         clearer.start()
         time.sleep(0.01)
         self.assertTrue(clearer.is_alive())
+
         release.set()
         producer.join(5)
         clearer.join(5)
+
         self.assertFalse(producer.is_alive())
         self.assertFalse(clearer.is_alive())
         self.assertEqual(errors, [])
@@ -1579,11 +1600,13 @@ class VeryHeavyGenerationLogManagerTest(unittest.TestCase):
             autoClearMaximumEntries=100,
         )
         manager.RetiredCleanupBudget = 64
+
         ordinary = []
         rollover = []
         retention = []
         maximumRetired = 0
         maximumBatches = 0
+
         for index in range(50_000):
             categoryId = CORE_LOG_CATEGORY if index % 3 else APPLICATION_LOG_CATEGORY
             triggersRollover = (
@@ -1597,15 +1620,18 @@ class VeryHeavyGenerationLogManagerTest(unittest.TestCase):
                 manager.entryCount() + 1 > manager.maximumEntries
                 or manager.retainedCharacters + len(message) > manager.maximumCharacters
             )
+
             started = time.perf_counter_ns()
             manager.append(message, categoryId)
             elapsed = time.perf_counter_ns() - started
+
             if triggersRollover:
                 rollover.append(elapsed)
             elif atRetention or causesRetention:
                 retention.append(elapsed)
             else:
                 ordinary.append(elapsed)
+
             maximumRetired = max(maximumRetired, manager.retiredEntryCount)
             maximumBatches = max(maximumBatches, len(manager._retiredBatches))
 
@@ -1623,6 +1649,7 @@ class VeryHeavyGenerationLogManagerTest(unittest.TestCase):
         self.assertTrue(rollover)
         self.assertLessEqual(maximumRetired, manager.maximumEntries)
         _assertManagerInvariants(self, manager)
+
         self.report(
             'append-latency',
             ordinary=distribution(ordinary),

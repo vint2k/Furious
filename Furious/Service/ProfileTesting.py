@@ -259,6 +259,8 @@ class _PingWorker(QtCore.QRunnable):
                 interval=1,
             )
         except Exception as ex:
+            # Any non-exit exceptions
+
             latency = classname(ex)
         else:
             if response.address and response.is_alive:
@@ -393,6 +395,8 @@ class _LatencyScheduler(QtCore.QObject):
             try:
                 endpointKey, address, port = self.tcpingEndpoint(job.target.snapshot)
             except Exception as ex:
+                # Any non-exit exceptions
+
                 self.completeJob(job, classname(ex))
 
                 continue
@@ -693,6 +697,7 @@ class _DownloadSpeedWorker(HttpGetManager):
         self.profile = profile
         self.port = port
         self.options = options
+
         self.result = ProfileTestResult(
             ProfileTestField.DownloadSpeed,
             '',
@@ -701,6 +706,7 @@ class _DownloadSpeedWorker(HttpGetManager):
         self.hasSpeedResult = False
         self.totalBytesRead = 0
         self.hasDataCounter = 0
+
         self.cancelled = False
         self._startInProgress = False
         self._completionInProgress = False
@@ -1029,6 +1035,8 @@ class _DownloadSpeedWorker(HttpGetManager):
                 try:
                     value = networkReply.error().name
                 except Exception:
+                    # Any non-exit exceptions
+
                     value = 'UnknownError'
 
                 if isinstance(value, bytes):
