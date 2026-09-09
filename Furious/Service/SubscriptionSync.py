@@ -158,6 +158,7 @@ class SubscriptionSynchronizer:
 
             existing.connection = prepared.connection
             existing.metadata = metadata
+
             synchronized.append(existing)
 
         for removed in existingById.values():

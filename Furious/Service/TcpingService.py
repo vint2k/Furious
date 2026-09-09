@@ -100,6 +100,7 @@ class TcpingProbe(QtCore.QObject):
 
         self.request = request
         self.completionHasRun = False
+
         self.elapsedTimer = QtCore.QElapsedTimer()
         self.socket = QTcpSocket(self)
         self.timeoutTimer = QtCore.QTimer(self)

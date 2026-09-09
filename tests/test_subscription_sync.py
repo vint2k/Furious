@@ -77,6 +77,7 @@ class SubscriptionSynchronizerTest(unittest.TestCase):
             key='upstream:other',
         )
         originalId = retained.metadata.profileId
+
         profiles = [manual, retained, removed, other]
         incoming = [
             profile('Remote label', 'new.example', key='upstream:one'),
@@ -151,6 +152,7 @@ class SubscriptionSynchronizerTest(unittest.TestCase):
         )
         incoming = profile('Incoming', 'new.example')
         profiles = [retained]
+
         originalMetadata = retained.metadata.toMapping()
         originalConnection = retained.connection.deepcopy()
 
@@ -169,6 +171,7 @@ class SubscriptionSynchronizerTest(unittest.TestCase):
         self.assertEqual(retained.metadata.toMapping(), originalMetadata)
         self.assertEqual(retained.connection, originalConnection)
         self.assertFalse(retained.deleted)
+
         self.assertEqual(incoming.itemSubscription, '')
         self.assertFalse(incoming.itemSubscriptionManaged)
 
@@ -183,8 +186,10 @@ class SubscriptionSynchronizerTest(unittest.TestCase):
         )
         unrelated = profile('Manual', 'manual.example')
         profiles = [retained, unrelated]
+
         snapshot = SubscriptionSynchronizer().snapshot(profiles, 'group')
         incoming = profile('After', 'new.example', key='upstream:one')
+
         plan = SubscriptionSynchronizer().prepare(snapshot, (incoming,))
 
         retained.metadata.annotations = 'edited while preparing'
@@ -194,8 +199,10 @@ class SubscriptionSynchronizerTest(unittest.TestCase):
 
         self.assertIs(profiles[0], retained)
         self.assertIs(profiles[1], unrelated)
+
         self.assertEqual(retained.connection['address'], 'new.example')
         self.assertEqual(retained.itemRemark, 'After')
+
         self.assertEqual(retained.metadata.annotations, 'edited while preparing')
         self.assertEqual(retained.metadata.latency, '41 ms')
         self.assertEqual(result.changedProfileIds, (retained.metadata.profileId,))
@@ -211,6 +218,7 @@ class SubscriptionSynchronizerTest(unittest.TestCase):
         )
         profiles = [retained]
         synchronizer = SubscriptionSynchronizer()
+
         snapshot = synchronizer.snapshot(profiles, 'group')
         plan = synchronizer.prepare(
             snapshot,

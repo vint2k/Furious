@@ -106,6 +106,7 @@ class RuntimeLifecycleTest(TestCase):
         runtime = _Runtime(exitCallback=router.publish)
         router.attach(runtime, owner)
         lease = RuntimeLease(runtime, router)
+
         thread = threading.Thread(target=runtime.publishCode, args=(9,))
 
         thread.start()
@@ -114,6 +115,7 @@ class RuntimeLifecycleTest(TestCase):
         self.assertTrue(waitFor(lambda: bool(owner.events)))
         self.assertIs(owner.events[0][2], self.app.thread())
         self.assertEqual(owner.events[0][1].code, 9)
+
         lease.release()
 
     def testRouterRejectsAnUntypedRuntimeExit(self):
@@ -146,6 +148,7 @@ class RuntimeLifecycleTest(TestCase):
             for _index in range(32):
                 router = RuntimeEventRouter()
                 references.append(weakref.ref(router))
+
                 router.finishRelease()
                 router.deleteLater()
 
@@ -166,12 +169,14 @@ class RuntimeLifecycleTest(TestCase):
 
         runtime.publishCode(11)
         lease.commit(lambda current, event: committed.append((current, event)))
+
         processQtEvents()
 
         self.assertEqual(owner.events, [])
         self.assertEqual(len(committed), 1)
         self.assertIs(committed[0][0], runtime)
         self.assertEqual(committed[0][1].code, 11)
+
         lease.release()
 
     def testPostCommitDuplicateExitIsDeliveredOnce(self):
@@ -186,11 +191,13 @@ class RuntimeLifecycleTest(TestCase):
 
         runtime.publishCode(12)
         runtime.publishCode(13)
+
         processQtEvents()
 
         self.assertEqual(owner.events, [])
         self.assertEqual(len(committed), 1)
         self.assertEqual(committed[0][1].code, 12)
+
         lease.release()
 
     def testReleaseSuppressesLateQueuedExitAndIsIdempotent(self):
@@ -202,8 +209,10 @@ class RuntimeLifecycleTest(TestCase):
         lease = RuntimeLease(runtime, router)
 
         runtime.publishCode(13)
+
         lease.release()
         lease.release()
+
         processQtEvents()
 
         self.assertEqual(owner.events, [])
@@ -224,9 +233,12 @@ class RuntimeLifecycleTest(TestCase):
             runtime = _ProcessRuntime(
                 exitCallback=lambda current, event: events.append((current, event))
             )
+
             runtime.start()
+
             self.assertIs(runtime.state, RuntimeState.Alive)
             self.assertTrue(runtime.isRunning())
+
             runtime._pollProcess()
             runtime._pollProcess()
 
@@ -234,9 +246,12 @@ class RuntimeLifecycleTest(TestCase):
         self.assertIs(events[0][1].reason, RuntimeExitReason.InvalidConfiguration)
         self.assertEqual(events[0][1].code, 23)
         process.close.assert_called_once_with()
+
         runtime.dispose()
+
         self.assertIsNone(runtime._monitorConnection)
         self.assertIsNone(runtime._output._timerConnection)
+
         runtime.dispose()
 
     def testMultiprocessingSpawnFailureRaisesStructuredError(self):
@@ -255,7 +270,9 @@ class RuntimeLifecycleTest(TestCase):
 
         self.assertIs(raised.exception.reason, RuntimeExitReason.StartFailure)
         self.assertIn('fixture spawn failure', raised.exception.details)
+
         runtime.dispose()
+
         self.assertIsNone(runtime._monitorConnection)
         self.assertIsNone(runtime._output._timerConnection)
 

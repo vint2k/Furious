@@ -313,14 +313,17 @@ class _LatencyScheduler(QtCore.QObject):
             self.threadPool.setMaxThreadCount(self.maxConcurrency)
 
         self.pingWorkerFactory = pingWorkerFactory
+
         self.queue = collections.deque()
         self.activeJobs = {}
         self.tcpingRequests = {}
         self.tcpingEndpointRequests = {}
         self.tcpingCompletionQueue = collections.deque()
         self.nextTcpingRequestId = 1
+
         self.tcpingThread = None
         self.tcpingEngine = None
+
         self.drainScheduled = False
         self.tcpingCompletionScheduled = False
         self.shuttingDown = False
@@ -363,6 +366,7 @@ class _LatencyScheduler(QtCore.QObject):
 
         engine = TcpingEngine(self, self.tcpingMaxConcurrency)
         thread = TcpingThread(engine, self)
+
         engine.moveToThread(thread)
 
         self.tcpingThread = thread
@@ -458,6 +462,7 @@ class _LatencyScheduler(QtCore.QObject):
             self.tcpingEndpointRequests.pop(group.endpointKey, None)
 
         self.tcpingCompletionQueue.append(requestId)
+
         self.scheduleTcpingCompletion()
 
     def scheduleTcpingCompletion(self):
