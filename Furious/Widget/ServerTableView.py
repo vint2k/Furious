@@ -908,7 +908,6 @@ class ServerTableView(
                     QtCore.Qt.Key.Key_M,
                 ),
             ),
-            AppQSeparator(),
             AppQAction(
                 _('Clear Test Results'),
                 callback=lambda: self.clearSelectedItemTestResult(),
@@ -917,7 +916,6 @@ class ServerTableView(
                     QtCore.Qt.Key.Key_R,
                 ),
             ),
-            AppQSeparator(),
             AppQAction(
                 _('Stop All Tests'),
                 callback=self.profileTestManager.cancelAll,
@@ -959,6 +957,8 @@ class ServerTableView(
                 ),
             ),
             AppQSeparator(),
+            *self.testActions,
+            AppQSeparator(),
             self.advancedActionRef,
             AppQSeparator(),
             AppQAction(
@@ -989,7 +989,6 @@ class ServerTableView(
 
         self._registerActionShortcuts(self.contextMenu.actions())
         self._registerActionShortcuts(self.importActions)
-        self._registerActionShortcuts(self.testActions)
 
         self.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.handleCustomContextMenuRequested)

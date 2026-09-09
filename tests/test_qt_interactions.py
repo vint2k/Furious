@@ -1110,37 +1110,43 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                         for action in table.testActions
                         if isinstance(action, AppQAction)
                     ]
-                    menuActions = [
-                        action
-                        for action in home.testMenu.actions()
-                        if not action.isSeparator()
+                    contextActions = table.contextMenu.actions()
+                    firstTestIndex = contextActions.index(testActions[0])
+                    testSection = contextActions[
+                        firstTestIndex : firstTestIndex + len(table.testActions)
                     ]
 
                     self.assertEqual(len(testActions), 5)
-                    self.assertEqual(menuActions, testActions)
+                    self.assertEqual(
+                        [action for action in testSection if not action.isSeparator()],
+                        testActions,
+                    )
                     self.assertEqual(
                         [
                             None if action.isSeparator() else action.text()
-                            for action in home.testMenu.actions()
+                            for action in testSection
                         ],
                         [
                             'Test Ping Latency',
                             'Test Tcping Latency',
                             'Test Download Speed',
-                            None,
                             'Clear Test Results',
-                            None,
                             'Stop All Tests',
                         ],
                     )
                     self.assertTrue(testActions[-1].icon().isNull())
-                    self.assertFalse(home.testButton.icon().isNull())
+                    self.assertFalse(hasattr(home, 'testButton'))
+                    self.assertFalse(hasattr(home, 'testMenu'))
+                    self.assertTrue(contextActions[firstTestIndex - 1].isSeparator())
+
+                    afterTests = firstTestIndex + len(testSection)
+                    self.assertTrue(contextActions[afterTests].isSeparator())
+                    self.assertIs(
+                        contextActions[afterTests + 1], table.advancedActionRef
+                    )
 
                     for testAction in testActions:
-                        self.assertNotIn(
-                            testAction,
-                            home.userServersQTableWidget.contextMenu.actions(),
-                        )
+                        self.assertEqual(contextActions.count(testAction), 1)
 
                     table.setFocus()
                     processQtEvents()
@@ -1163,8 +1169,8 @@ class SharedSettingsQtWorkflowTest(unittest.TestCase):
                         manager._latencyScheduler, 'cancelAll'
                     ) as cancel:
                         table = home.userServersQTableWidget
-                        menu = home.testMenu
-                        QTest.mouseClick(home.testButton, QtCore.Qt.LeftButton)
+                        menu = table.contextMenu
+                        menu.popup(table.viewport().mapToGlobal(QtCore.QPoint(10, 10)))
                         processQtEvents()
                         menu.setActiveAction(table.testActions[-1])
                         QTest.keyClick(menu, QtCore.Qt.Key_Return)
