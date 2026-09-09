@@ -944,6 +944,7 @@ class HomePage(Mixins.QTranslatable, QMainWindow):
         """Gate connection-sensitive Home controls during lifecycle transitions."""
         self.systemProxyComboBox.setEnabled(bool(enabled))
         self.tunModeSwitch.setEnabled(bool(enabled) and self._tunModeAvailable)
+        self.tunModeLabel.setEnabled(self.tunModeSwitch.isEnabled())
 
     @QtCore.Slot()
     def handleServerSelectionChanged(self, *_args):

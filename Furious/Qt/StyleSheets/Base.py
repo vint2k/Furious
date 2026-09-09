@@ -47,7 +47,8 @@ def baseStyleSheet(palette):
                 background-color: transparent;
             }}
 
-            QLabel:disabled {{
+            QLabel:disabled,
+            QLabel#SettingsCardTitle:disabled {{
                 color: {palette['disabled']};
             }}
 

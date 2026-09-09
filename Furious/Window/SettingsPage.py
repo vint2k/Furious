@@ -649,6 +649,7 @@ class SettingsPage(Mixins.QTranslatable, QMainWindow):
             _('Route system traffic through the active proxy connection.'),
         )
         self.tunModeCard.checkBox.setEnabled(self._tunModeAvailable)
+        self.tunModeCard.titleLabel.setEnabled(self.tunModeCard.checkBox.isEnabled())
 
         AppSettingsController().tunModeChanged.connect(
             self.tunModeCard.checkBox.syncCheckedAnimated
@@ -1123,6 +1124,7 @@ class SettingsPage(Mixins.QTranslatable, QMainWindow):
     def setConnectionControlsEnabled(self, enabled: bool):
         """Disable connection-sensitive settings during a transition."""
         self.tunModeCard.checkBox.setEnabled(bool(enabled) and self._tunModeAvailable)
+        self.tunModeCard.titleLabel.setEnabled(self.tunModeCard.checkBox.isEnabled())
         self.systemProxyCard.comboBox.setEnabled(bool(enabled))
 
     def showEvent(self, event):
