@@ -10,8 +10,9 @@ This scope owns persistent page composition and top-level presentation, not shar
   Preserve application-facing forwarding APIs until their consumers migrate deliberately. Bulk profile forwarding
   must retain the bulk mutation boundary through Home and its model, without expanding into per-profile refreshes.
 - Home, Settings, tray actions, and reusable dialogs render the same connection, routing, and settings controllers.
-  Platform/capability availability affects presentation but does not authorize an unsupported persisted value or a
-  duplicate host side effect.
+  Apply availability and interaction gating to both a control and its associated label, on initial composition and
+  later state changes. Disabling presentation does not clear a stored preference or authorize a duplicate host side
+  effect; preserve the controller's platform/capability policy.
 - The current page composition shares one subscription workflow between server and subscription presentation, records
   traffic into one history, and derives metrics/endpoint presentation from owned services. These exact locations may
   evolve, but a refactor retains one durable owner, one scheduler/request path, and one signal path.

@@ -14,6 +14,8 @@ human-reviewed translations.
 - Preserve existing translation-key and language-field order. The generator retains dictionary order rather than
   enforcing a universal sort; source traversal can affect newly discovered entries. Do not sort the catalog as cleanup.
   `source` contains deduplicated fully qualified modules and is rebuilt by extraction rather than manually curated.
+  Changing a source literal changes catalog identity: extraction may remove the old reviewed entry and introduce a
+  new unreviewed one. Review wording changes as translation migrations, including reused keys in other modules.
 - Inspect the full diff. Preserve deliberate translations/review flags, HTML/newline semantics, and natural RU/ZH
   meaning. Curated, verified translations need `isReviewed` set to the string `'True'`, as the generator compares that
   literal; a Python Boolean is not equivalent. Review applies to the entry, so inspect its other language values too.

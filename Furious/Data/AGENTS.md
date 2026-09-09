@@ -5,8 +5,10 @@ application-data or settings directory.
 
 ## Boundary and provenance
 
-- This directory ships application assets, not user state: Xray GeoIP/geosite data, Hysteria MMDB/ACL data, the local
-  MapLibre endpoint map, and the bundled font. Settings, subscriptions, caches, and temporary downloads belong elsewhere.
+- This directory ships Xray GeoIP/geosite data, Hysteria MMDB/ACL data, the local MapLibre endpoint map, and the
+  bundled font. It is not a home for settings, subscriptions, or general caches. The Xray updater currently replaces
+  assets at the package-resolved data paths, so these files are not necessarily immutable at runtime. Review source,
+  installed, and packaged write permissions separately; an application refresh may appear as a source-tree change.
 - Preserve upstream licenses, provenance, binary/text formats, filenames, and paths consumed by constants, backends,
   tests, setuptools package data, and Nuitka. Do not incidentally reformat generated ACLs or replace binary assets.
 - Markdown files in this directory are repository metadata, not runtime data. Keep top-level and nested Markdown files

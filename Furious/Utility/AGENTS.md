@@ -14,9 +14,10 @@ general-purpose utility bucket.
   log-write failure never replaces the primary failure.
 - The parent entry point joins only the child it created and shows the fallback Qt report only for a nonzero result.
   Never discover or terminate processes by name, and keep normal/source/packaged command-line entry points equivalent.
-- Shared crash status is a synchronized Boolean plus the child's semantic exit result; diagnostic text is written to
-  a file and may include retained logs plus a traceback. Do not describe the complete crash file as size-bounded by
-  the Boolean channel. Redaction and crash-write failure are separate from application-exit correctness.
+- Shared crash status is a synchronized Boolean plus the child's semantic exit result; set the flag only after the
+  diagnostic file is written successfully. Text may include retained logs plus a traceback, so the Boolean channel
+  does not bound the crash file's size or sanitize its contents. Keep crash-write failure separate from the primary
+  exit result, and test reporting both with and without a constructed application/log manager.
 - Fallback presentation runs in the parent after a nonzero child result. It constructs a Qt application for the
   report but does not call the ordinary application `run()` initialization. Keep that constructor dependency in
   failure-path tests, and preserve the original result when evolving reporting failures rather than adding a supervisor.

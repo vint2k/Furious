@@ -32,8 +32,9 @@ scope adds rules shared by all bundled proxy backends without making the richest
   must be bounded, idempotent, and safe after partial acquisition. Report incomplete reaping explicitly; reaching a
   deadline or changing logical execution state does not prove that native resources have exited.
 - Runtime factories follow the current plugin contract: fully prepare and return one owned launch whose zero-argument
-  start is separate from readiness observation. Do not hide readiness waits, Boolean success channels, or controller
-  policy inside a backend runtime.
+  start is separate from readiness observation. If preparation fails before a valid launch transfers to the caller,
+  the factory must release its own partial resources; the caller cannot dispose a runtime it never received. Do not
+  hide readiness waits, Boolean success channels, or controller policy inside a backend runtime.
 
 ## Backend scopes
 

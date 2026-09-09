@@ -95,6 +95,8 @@
 - Match evidence to the contract: round trips/migrations for models and repositories; exact transitions/signal counts
   for controllers; stale/cancel/rollback/cleanup paths for services; partial startup and resource reaping for runtimes;
   mocked OS branches for host helpers; import/discovery and packaged checks for compiler-sensitive changes.
+  Test a resource that refuses cleanup as well as one that exits normally. A terminal flag, cleared reference, or
+  elapsed timeout is not evidence of native resource release; distinguish that observation from the intended guarantee.
 - Report source inspection, executed tests, mocked platform evidence, and packaged validation separately. A passing
   source suite does not prove native distributions or every declared Python/Qt floor. Release import checks do not
   replace behavioral tests; record untested targets and compatibility gaps explicitly.
@@ -111,8 +113,9 @@
   current architecture, tests, verified runtime behavior, explicit design, or an intentional refactor completed in the
   same change.
 - Put a rule at the narrowest scope where it helps future decisions; let child guides specialize rather than repeat
-  parents. Remove obsolete content inside files, distinguish preferred architecture from compatibility paths, and
-  preserve every established file path while doing so.
+  parents. For each local rule, identify the decision it protects and the implementation or test that could disprove
+  it. Remove obsolete content inside files, distinguish preferred architecture from compatibility paths, and preserve
+  every established file path while doing so. A guidance audit must not turn an observed defect into a required design.
 - After significant architectural work, re-read the applicable hierarchy as a fresh agent: can it identify the
   owner, invariant, failure boundary, and relevant tests without relying on conversation history? Challenge rules
   likely to become stale, circular references, and wording that freezes incidental structure.

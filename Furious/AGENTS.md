@@ -49,6 +49,9 @@ domain, persistence, orchestration, platform integration, and presentation; nest
   every asynchronous workflow. Page visibility may control rendering, never ownership of collection or draining.
 - Preserve unknown/forward-compatible fields through model, repository, backend editor, and serialization changes.
   Compatibility normalization must be narrow, intentional, and tested separately from observational loading.
+  A dict-like profile exposes its connection document through the mapping interface, not its complete persistence
+  record. Choose the explicit profile, metadata, or connection representation required by each boundary; generic
+  mapping conversion is not a profile backup.
 - Import, clipboard, share-link, file, and QR paths reuse the owning plugin codecs and validation. QR is a presentation
   transport, not a second protocol parser; construct a complete neutral result before repository mutation and never log
   the secret-bearing payload.

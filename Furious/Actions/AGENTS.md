@@ -8,9 +8,10 @@ presentation without becoming a workflow authority.
 - Actions adapt one user command to presentation. Resolve live controller/repository state when triggered, delegate the
   operation to its owner, and render the result; an action is not a second connection, routing, subscription, or
   persistence authority.
-- Prefer one shared `QAction` for one semantic command across menus and buttons so checked/enabled state, shortcut,
-  callback, and translation cannot diverge. A host widget may narrow shortcut context; do not make menu shortcuts
-  application-wide when focused editors or other controls own the same keys.
+- Share a `QAction` across menus/buttons when command target, owner lifetime, and shortcut scope are the same.
+  Distinct window/tray contexts may need separate actions that observe the same controller; do not force one global
+  action across incompatible lifetimes. Keep checked/enabled state and translation consistent, and do not make menu
+  shortcuts application-wide when focused editors or other controls own the same keys.
 - Routing and connection actions render the shared controllers. Rebuilding a dynamic menu releases the old actions,
   action group, and callbacks before publishing the new snapshot; user-defined labels remain untranslated.
 - Existing import actions still combine capture/file/clipboard presentation with incremental repository insertion. Treat
@@ -25,7 +26,9 @@ presentation without becoming a workflow authority.
   diagnostic excerpts and never log or echo a complete secret-bearing payload merely to explain a parse failure.
 - Screen capture and QR decoding currently run synchronously; batching the resulting imports does not make capture
   interruptible. If moved to workers, transfer data through an owned GUI-thread continuation without retaining
-  transient windows. QR export generation belongs to its result window, not a parallel action-owned exporter.
+  transient windows. Each screen-capture action owns a separate native capture handle, including separate tray/page
+  instances; type-deduplicated cleanup must not leave one open. QR export generation belongs to its result window,
+  not a parallel action-owned exporter.
 - Small profile imports use the direct bulk path; large imports yield between bounded batches. Preserve captured
   input and one operation context until completion/cancellation, reject deferred calls after teardown, and retain
   already committed batches when cancellation stops later work. A parser call itself is not preempted by a batch.

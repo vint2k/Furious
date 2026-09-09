@@ -9,7 +9,8 @@ Qt presentation, plugin discovery, or workflow execution.
   controllers, plugin registries, or concrete backends into this layer.
 - `CoreConfiguration` is a dict-like connection document whose construction is deliberately non-throwing: unsupported
   or malformed input becomes an empty object with `constructionError()`. Keep construction and serialization errors
-  distinct and preserve useful context through callers.
+  distinct and preserve useful context through callers. Successful generic mapping construction is not protocol
+  validation: backend acceptance belongs to the selected capability, and serializability is a separate check.
 - `ServerProfile` composes an independent connection document with `ProfileMetadata`. Display name, stable profile ID,
   subscription ownership/key, latency, speed, annotations, and local flags never become core-configuration fields.
 - Preserve unknown metadata and legacy aliases across load/save. `independentCopy()` creates a manual profile with a new

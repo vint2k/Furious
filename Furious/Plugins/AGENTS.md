@@ -8,8 +8,11 @@ capability definitions, atomic registration, dispatch, and plugin lifecycle; bac
 - `Plugins.API` defines independently composable capabilities for protocols/editors, subscription decoding, runtime
   factories, routing/TUN/probes, statistics, settings, actions, and navigation. Extend the owning capability instead of
   adding backend-name branches or a parallel registry.
-- The registry normalizes and validates a plugin's complete contribution before committing indexes. Duplicate IDs or
-  schemes, incompatible API versions, invalid descriptors, and initialization failure leave existing providers intact.
+- The registry normalizes and validates a plugin's complete contribution before changing indexes. Initialization
+  runs with the contribution indexed; if it fails, shutdown is attempted and those indexes are removed. This is
+  rollback of registry publication, not a transaction over arbitrary plugin side effects. Plugins must clean their
+  own partial acquisitions even when initialization fails. Duplicate IDs/schemes and invalid versions/descriptors
+  must leave existing providers intact.
 - Host plugin types register before external entry-point discovery. Bundled registrations are explicit for source,
   wheel, and Nuitka inclusion. External entries currently follow metadata enumeration order; do not promise sorted
   discovery or rely on it for precedence. Registration is atomic per plugin, not across a multi-plugin entry point.

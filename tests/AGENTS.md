@@ -33,8 +33,11 @@ and test-tier selection; test convenience never weakens a production invariant.
   Rendering regressions may assert targeted pixel/alpha or geometry properties under explicit themes and scaling.
   Stylesheet selector counts are not rendering invariants: shared rules and component overrides can both be valid.
 - Prefer exact state, signal counts, destroyed signals, weak references, registry/child counts, thread/process/handle
-  ownership, and final exit status. RSS/handle trends and repeated lifecycle batches belong in stress tiers;
-  `gc.collect()` is diagnostic at batch boundaries, never a production fix or per-cycle requirement.
+  ownership, and final exit status. A mock cleared from its owner does not prove termination: failure-to-reap tests
+  must independently retain and inspect the fake process. For Qt API compatibility, a permissive Python fake cannot
+  validate a real binding's accepted argument types; exercise a harmless real object at that boundary.
+  RSS/handle trends and repeated lifecycle batches belong in stress tiers; `gc.collect()` is diagnostic at batch
+  boundaries, never a production fix or per-cycle requirement.
 
 ## Tiers and maintenance
 
@@ -42,6 +45,9 @@ and test-tier selection; test convenience never weakens a production invariant.
   tests -v` for full source-suite discovery (opt-in tests still skip). The runner is unittest, not pytest. Run the
   narrow module first, then the affected tier documented in `tests/README.md`. The release-confidence tier is
   explicitly opt-in with `FURIOUS_VERY_HEAVY_TESTS=1`; packaged/manual smoke work uses disposable environments.
+  The historical log comparison additionally requires `FURIOUS_LOG_MANAGER_BASELINE` naming a trusted, compatible
+  local Git revision; it loads that revision's implementation. Report this opt-in and any skips separately rather
+  than assuming the very-heavy switch alone executes every discovered case.
 - Source-only tests and an offscreen platform do not prove a packaged Qt runtime. Compiler-sensitive changes need
   the relevant native lifecycle module and a separate compiled probe; report skipped or unavailable targets
   explicitly. The release workflow currently builds/checks artifacts without running this source behavioral suite.

@@ -11,7 +11,9 @@ This scope owns restoration, migration, ordering, and persistence; workflows and
 - Preserve stable profile/subscription IDs, subscription ownership/key, ordering, unknown fields, and legacy schemas.
   Active row/index and display text are compatibility/presentation state, not identity.
 - A restore failure remains observable. Automatic cleanup must not replace unreadable persisted bytes with an empty
-  fallback; only an explicit successful replacement may do so.
+  fallback; only an explicit successful replacement may do so. Root decoding, individual-record hydration, and later
+  serialization are separate failure boundaries. Test malformed records inside a valid root as well as malformed
+  roots; the existing root fallback is not a guarantee that every record error is recoverable.
 - Stage fallible decode/migration before live mutation. Subscription reconciliation currently belongs to
   `Service/SubscriptionSync.py` and commits through the compatibility live collection: matched managed profiles
   retain object/profile identity and local metadata, removed profiles become stale, and unrelated groups remain

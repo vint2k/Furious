@@ -18,7 +18,9 @@ for unrelated application orchestration to accumulate in a broad helper namespac
   failure, and None when policy deliberately leaves host settings unchanged. Startup registration and some routing
   helpers return Booleans; script-mode startup registration intentionally does nothing. Preserve these distinctions
   at callers instead of treating absence of an exception as confirmed host state. Check every native command result,
-  including each enabled macOS network service, and bound host-command waits at this boundary.
+  including each enabled macOS network service, and bound host-command waits at this boundary. A per-command timeout
+  is not a deadline for a loop over services or routes. Multi-step host mutation may be partial when a later command
+  fails; a False result does not establish that earlier effects were rolled back.
 - Prefer argument vectors over shell strings. Each caller owns any responsiveness/cleanup timeout appropriate to its
   context; build-time commands and GUI-time host mutation do not share one universal timeout policy.
 - Windows proxy calls, Linux desktop settings/host bridging, and macOS network-service operations are distinct

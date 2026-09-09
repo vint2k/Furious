@@ -28,7 +28,12 @@ full JSON preservation, routing/assets/statistics, and protocol/transport/TLS pr
   usable file. Distinguish this updater from `Deploy.py --download`, whose download/integrity behavior must be
   inspected separately; shared filenames do not make the two mechanisms equivalent.
 - Routing selection IDs, user routing documents, and translated built-in labels are different contracts. Preserve
-  custom document content and named-profile identity while composing runtime routing/API statistics.
+  custom document content and named-profile identity while composing runtime routing/API statistics. Trace the
+  selected repository routing document separately from the connection's own routing branch; neither may be mutated
+  as a side effect of preparing a launch.
+- Statistics preparation is optional and may leave a valid runtime without a statistics target. Preserve that
+  distinction from connection failure; later sampling uses the target captured for this runtime, not newly edited
+  settings or an assumption based solely on the backend name.
 - Verify full-document and URI preservation, aliases and unknown values, runtime-copy isolation for
   routing/log/TUN/tests, multiple TUN inbounds, asset integrity/failure, statistics and process cleanup,
   compiled-safe UI callbacks, and repeated editor/window destruction. Use `tests/test_xray_asset_download.py`,

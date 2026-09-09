@@ -19,8 +19,10 @@ exceptions; it does not define the source test suite or imply that every package
 ## Workflow engineering
 
 - Keep packaging declarations synchronized with `Deploy.py`, `pyproject.toml`, `setup.py`, and `requirements.txt`.
-  Default-to-newest dependencies still need deterministic assertions at ABI/feature boundaries; pin or checksum external
-  build tools where the workflow establishes a supply-chain boundary.
+  The Python floor advertised by package metadata is a separate claim from the interpreter versions exercised by CI;
+  newer matrix rows cannot prove that floor. Likewise, successful Qt imports do not prove event-loop or binding-call
+  compatibility. Default-to-newest dependencies/assets still need recorded provenance and deterministic assertions
+  at ABI/feature boundaries; pin or checksum external build tools where the workflow establishes that boundary.
 - The workflow default shell is Bash, including Windows jobs. Select PowerShell explicitly for native Windows paths,
   process APIs, or PowerShell syntax, and keep OS/architecture conditions on the step that owns the difference.
 - Flatpak checks run inside the installed sandbox, inspect the application's required native closure rather than every

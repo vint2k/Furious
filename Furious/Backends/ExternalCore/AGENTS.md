@@ -34,5 +34,7 @@ the intentionally different direct-subprocess scope for user-selected executable
   immediate-exit failure, complete and partial output, exact callback/reader/watcher cleanup, repeated stop/dispose,
   TUN opt-in and remote-address handling, subscription rejection, and transient editor destruction. Update this
   guide when the process contract evolves rather than preserving today’s implementation mechanically. Start with
-  `tests/test_external_core.py` and `tests/test_backend_editor_contract.py`. A failed final reap is a cleanup
-  failure to report; elapsed stop deadlines alone do not prove that the OS process or all descendants have exited.
+  `tests/test_external_core.py` and `tests/test_backend_editor_contract.py`. Exercise a child that remains alive
+  after escalation and readers/watchers that outlast their joins. A failed final reap is a cleanup failure to report;
+  clearing the runtime's process/thread references must not be used as evidence that those resources exited.
+  Direct-child exit also does not prove that descendants closed inherited pipes.

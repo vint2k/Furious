@@ -33,6 +33,8 @@ for lifetime primitives. This scope owns multi-stage workflows and temporary res
   replacing the runtime callback. Worker-thread exits are queued to the router's Qt thread, delivered at most once, and
   suppressed after release. Execution liveness and endpoint/TUN readiness remain separate observations. A readiness
   timeout never replaces a typed exit after execution has already stopped, even when that exit is still queued.
+  Lease release currently logs stop/dispose errors and completes logical callback release; this is not evidence that
+  the underlying resource was reaped. Changes to cleanup-failure reporting must cover both runtime and lease owners.
 - `HttpGetManager` owns reply/error/timeout cleanup. DNS recursion and external-input caches are bounded. Update,
   connectivity, endpoint, subscription, and asset requests own their exact reply and reject stale generations.
 - Subscription stages remain separate: decoders return neutral items; import constructs profiles/metadata;
@@ -52,14 +54,18 @@ for lifetime primitives. This scope owns multi-stage workflows and temporary res
 - Log transport, traffic collection, and metric history remain bounded and independent of page visibility. Rendering may
   be lazy; collection/draining ownership is not.
 - Logging accepts concurrent producers through one globally ordered model with count, total-character, and per-entry
-  limits. Whole-stream clearing swaps generations; retired entries are reclaimed in bounded batches under retention
-  budgets. Selective category clearing can cost O(k); do not claim every clear is constant-time.
+  limits. Batch input conversions are validated before mutation; compatibility per-entry signals observe the fully
+  committed batch. Presenters consume coalesced changes/cursors rather than replaying those signals as a second log.
+  Whole-stream clearing swaps generations; retired entries are reclaimed in bounded batches under retention budgets.
+  Selective category clearing can cost O(k); do not claim every clear is constant-time.
 - Log cursors are opaque and filter-specific. A generation change requires a reset; retention-only eviction supplies
   a new first-retained sequence so presenters can prune their prefix without rebuilding history. Capture entries and
   the next cursor atomically, and coalesce notifications without losing producer updates.
 - Metrics sampling owns its worker/future generation and rejects results after disconnect, disablement, replacement,
   or shutdown. Cancellation cannot stop an already-running plugin query: monitor contracts must bound blocking work.
   Normalize cumulative-counter resets before history aggregation; clearing usage must not erase speed history.
+  History contains finite values for registered metrics on a monotonic timeline. A missing metric sample is not a
+  measured zero; preserve that distinction when adding providers or aggregating sparse series.
 
 ## Profile testing
 

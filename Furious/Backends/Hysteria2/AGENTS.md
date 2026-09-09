@@ -17,9 +17,10 @@ Hysteria 2's nested upstream document, native-TUN capability, statistics, and ed
 
 - Managed native TUN replaces only the runtime copy’s `tun`. Disabled management preserves any explicit `tun`,
   including malformed data for the core to reject; only absence permits application tun2socks. Linux native TUN
-  requires the backend’s privilege and server-route-exclusion guarantees. Probe/download copies always remove native
-  TUN. Managed preparation currently resolves server addresses synchronously; do not describe the whole native-TUN
-  stage as event-driven merely because connection readiness is asynchronous.
+  requires the backend’s privilege and server-route-exclusion guarantees. The application's Linux privilege-helper
+  path does not grant an embedded native-TUN core the same privileges. Test these availability decisions separately.
+  Probe/download copies always remove native TUN. Managed preparation currently resolves server addresses
+  synchronously; do not describe the whole native-TUN stage as event-driven merely because readiness is asynchronous.
 - The statistics provider is a process-lifetime capability; the runtime captures a configured server-API target and
   sampling owns its monitor/query lifetime. API URL, client ID, and authorization secret are distinct from client
   connection credentials. Keep requests bounded, validate counters, and never log the secret or infer statistics

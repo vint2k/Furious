@@ -10,7 +10,9 @@ primitives; pages and services consume them without creating parallel registries
 
 - Reuse `Furious.Qt` `AppQ*` controls, `AppStyleSheet`, translation/theme mixins, and shared dialog/window infrastructure.
   Do not create parallel style, theme-transition, translation, or lifetime registries. Shared control styling belongs
-  in the application stylesheets; component-specific overrides are valid parts of stylesheet composition.
+  in the application stylesheets; component-specific overrides are valid parts of stylesheet composition. Check
+  selector specificity for disabled, hover, and selected states: a general disabled-label rule may lose to an
+  object-name rule even when the widget's enabled state is correct.
 - Controls that retranslate retain source text; semantic/user-defined values stay untranslated. Preserve keyboard focus,
   shortcut scope, accessibility, translated-text growth, responsive layout, high-DPI behavior, and both themes.
 - Application-owned theme transitions commit destination state immediately; snapshots are non-interactive presentation
@@ -27,7 +29,8 @@ primitives; pages and services consume them without creating parallel registries
   `finished` ends interaction, not native lifetime; operation context may be released then only if later callbacks
   do not need it.
 - `AppQDialog`/`AppQMainWindow` registries bridge asynchronous presentation/visibility; they are not substitute
-  application owners. Registry cleanup captures opaque tokens, never the object being released.
+  application owners. Cleanup captures a unique lifetime token, never the object being released or a reusable
+  numeric object ID. A delayed destruction callback must not evict a newer wrapper from the registry.
 - A Qt parent alone does not prove the Python wrapper or logical feature lifetime. Bare Qt `.show()` does not retain
   an unparented wrapper; `AppQMainWindow.show()` adds its own visible-window retention until accepted close. Do not
   solve ambiguity by global retention, indiscriminate delete-on-close, routine `gc.collect()`, or broad

@@ -17,9 +17,11 @@ host-shipped non-runtime plugins and must not gain private authority merely beca
   all shared parser state and caches, not merely absence of widgets in the immediate method. Worker preparation also
   requires the selected protocol handlers to opt in; a safe envelope decoder cannot authorize an unsafe downstream
   parser. Preserve the GUI compatibility fallback for unclassified capabilities.
-- Decoder output is descriptive, not a repository transaction. It cannot assign live profile identity, mutate a
-  subscription group, cancel tests, reconnect, or publish UI state; those decisions remain at the import/manager commit
-  boundaries.
+- Decoder output is descriptive, not a repository transaction. Supplied names and upstream IDs are input to profile
+  construction, not permission to overwrite local identity or grant remote ownership. It cannot mutate a group,
+  cancel tests, reconnect, or publish UI state; those decisions remain at the import/manager commit boundaries.
+  Test recognized-empty, wholly unsupported, and mixed-validity payloads separately so decoder matching is not
+  confused with successful profile import or authorization to clear an existing group.
 - Keep bundled registration deterministic, side-effect-light, and discoverable in source, wheel, and Nuitka builds.
   Test format selection/fallback, malformed and secret-bearing input, duplicate occurrence identity, unsupported
   subscription protocols, registration rollback, and absence of repository/UI mutation during decoding. Evolve this

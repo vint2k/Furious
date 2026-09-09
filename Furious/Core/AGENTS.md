@@ -11,10 +11,13 @@ This scope owns reusable embedded execution machinery and application tun2socks;
 - `CoreRuntime` execution state, typed terminal exit, and readiness are separate contracts. A process becoming alive is
   not proof that its proxy/TUN endpoint is ready, while a readiness timeout must not overwrite an already observed typed
   exit.
-- A runtime owns and reaps its exact child, process handle, monitor/drain timers, queues, callbacks, and feeder resources.
-  Stop is bounded, escalates only that child when needed, closes handles, and is safe after partial start or repetition.
-- Process-backed runtimes monitor and reap their own child, interpret a raw exit exactly once, and publish one typed exit
-  event. `isRunning()` is a passive execution-liveness query and must not consume or dispatch lifecycle events.
+- Required cleanup covers the exact child, process handle, monitor/drain timers, queues, callbacks, and feeder
+  resources. Stop must bound waits, escalate only the owned child, and remain safe after partial start or repetition.
+  A join timeout or failed handle close is not a successful reap. Verify actual child liveness before describing a
+  terminal execution state as complete resource release; include failed escalation in ownership tests.
+- Process-backed runtimes own exit monitoring and interpretation: publish one typed terminal event per execution,
+  preserving the raw exit and whether stop was requested. `isRunning()` is a passive liveness query and must not
+  consume or dispatch lifecycle events.
 - Child targets never touch Qt widgets. Output transport is non-blocking and bounded in message size, pending volume, and
   per-turn drain work; draining continues independently of Log-page visibility and backs off only when idle.
 - Parentless timers are acceptable only with a durable runtime owner and explicit disposal. Leaving the manager pool

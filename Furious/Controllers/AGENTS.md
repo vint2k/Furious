@@ -20,8 +20,9 @@ transitions. Services own execution resources; existing prompts are presentation
   are not generic connection errors.
 - `RoutingController` owns available capability options plus selected/persisted routing. Distinguish a newly
   selected repository profile from the active-profile reference and the independent runtime document; changes use
-  controlled reconnect, not mutation of the running document. User-defined routing labels are semantic data, not
-  translatable UI literals.
+  controlled reconnect, not mutation of the running document. Capability refresh prefers the active profile and
+  otherwise the repository's activated profile. Normalizing the displayed option does not itself persist a new
+  preference; explicit selection owns that mutation. User-defined routing labels are not translatable UI literals.
 - `SettingsController` is the shared policy path used by Home, Settings, tray, and platform integration. Startup
   registration persists only after host success; other preferences may apply immediately or on the next connection.
   Preserve each setting's actual application timing instead of imposing one transaction order on all preferences.

@@ -13,7 +13,9 @@ resource-manifest contract; it does not govern general UI layout.
   environment's `pyside6-rcc Resources.qrc -o Furious/Frozenlib/AppResources.py`. Never hand-edit generated resource
   code; inspect compiler-version churn separately from the intended alias/asset change.
 - Treat the alias as the application-facing identity and the source path as an implementation detail. Search both before
-  replacement so an apparently unused file is not removed while still generated or consumed through an alias.
+  replacement so an apparently unused file is not removed while still generated or consumed through an alias. Selecting
+  an already bundled Bootstrap icon normally changes its consumer only; it does not require regeneration or another
+  SVG copy. Compare the glyph's visible bounds at the actual control size, not only its nominal SVG canvas.
 - Verify alias uniqueness and source/package resolution, then inspect the actual control or tray use under both
   themes, high DPI, relevant sizes, disabled/selected states, and platform packaging where applicable. Deployment
   icons also have direct filesystem consumers in `Deploy.py`; a resource alias search alone cannot prove a PNG is

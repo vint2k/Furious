@@ -13,8 +13,10 @@ some service owners; that construction detail does not make every view an indepe
   keep index/deleted compatibility fields synchronized, and map proxy indexes to source objects before acting. Stable
   profile/subscription IDs—not display text, object row, or current sort order—preserve selection, focus, activation, and
   async write-back.
-- Sorting/filtering/reordering must retain logical selection and keyboard focus. Recursively scope table-owned menu
-  shortcuts as `WidgetShortcut` so a focused editor or another surface keeps its own shortcut semantics.
+- Sorting/filtering/reordering must retain logical selection and keyboard focus. Capture domain IDs before yielding
+  to a dialog or event-loop turn; an ordinary QModelIndex/source row may become invalid or refer to another item.
+  Map the resolved current object back through the proxy when restoring focus. Recursively scope table-owned menu
+  shortcuts as `WidgetShortcut` so focused editors and other surfaces keep their own shortcut semantics.
 
 ## Workflow and lifetime boundaries
 

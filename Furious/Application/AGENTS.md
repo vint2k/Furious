@@ -5,16 +5,19 @@ child-process supervisor and the inner application event loop.
 
 - `Furious.__main__` and `AppMainProcess` own the outer process/crash boundary; `DesktopApplication` owns the inner Qt
   composition. Keep those responsibilities separate and preserve semantic exit codes and original failure context.
-- Startup stages begin after singleton election. Plugins are available before repository restoration
-  interprets persisted profiles; controllers and presentation consume those initialized owners. Register cleanup as
-  each acquisition succeeds, and preserve these dependencies when changing stage order.
+- Plugin, storage, and UI initialization follows singleton election; the Qt application and its initial resource
+  owners already exist during election. Plugins are available before repository restoration interprets persisted
+  profiles. Register cleanup as each acquisition succeeds, including election-failure paths, and preserve these
+  dependencies when changing stage order.
 - Partial startup, normal exit, signals, and event-loop failure converge on one reverse-order, failure-isolating,
   idempotent cleanup path. `exit()` requests Qt termination; action/window/session handlers do not run cleanup directly.
 - A stage that fails before its cleanup callback is registered must release its own partial acquisitions. The outer
   cleanup stack releases completed stages; it cannot discover half-built controllers, UI, logging handlers, or
   native listeners. Restore logging configuration as well as closing handlers. Run service shutdown while its
   owners remain valid; scheduling `deleteLater()` is not evidence that workers or native resources have finished.
-  Review cooperative pool drains separately from the cleanup stack's ordering guarantees.
+  Review cooperative pool drains separately from the cleanup stack's ordering guarantees. The application pool's
+  timed wait logs unfinished work, whereas subscription preparation waits synchronously after its diagnostic timeout.
+  Neither policy can be inferred from reverse cleanup order or from the name of a shutdown method.
 - Singleton election serializes cooperating candidates, re-probes after waiting, recovers only a confirmed stale
   endpoint, and fails closed when ownership is uncertain, including privilege handoff. A successful Windows
   local-server listen alone does not establish exclusivity; command delivery and endpoint ownership are separate
