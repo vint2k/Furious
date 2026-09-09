@@ -374,6 +374,15 @@ class XrayCoreRuntimeFactory(CoreRuntimeFactory):
         """Return the timestamp format emitted by Xray-core."""
         return (r'\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}.\d{6}',)
 
+    def shutdown(self):
+        """Release the lazily acquired asset updater before Qt teardown."""
+        manager = getattr(self, '_assetDownloadManager', None)
+
+        if manager is not None:
+            manager.shutdown()
+
+            self._assetDownloadManager = None
+
     def afterConnected(self, httpProxy=None):
         """Update Xray geo assets after connecting when enabled."""
         if not SystemRuntime.isAssetsFolderWritable():
@@ -428,10 +437,15 @@ class XrayPlugin(FuriousPlugin):
 
     def __init__(self):
         """Create an isolated Xray runtime factory for this plugin."""
+        self._runtimeFactory = XrayCoreRuntimeFactory()
         self.capabilities = (
             *XRAY_PROTOCOL_HANDLERS,
             *XRAY_PROTOCOL_EDITORS,
-            XrayCoreRuntimeFactory(),
+            self._runtimeFactory,
             XrayStatsProvider(),
             XrayActionProvider(),
         )
+
+    def shutdown(self):
+        """Close the runtime factory's reusable asset download service."""
+        self._runtimeFactory.shutdown()

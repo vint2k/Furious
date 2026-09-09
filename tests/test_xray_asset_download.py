@@ -19,10 +19,13 @@
 
 from Furious.Backends.Xray.AssetDownloadManager import (
     XrayAssetAssetsDownloadManager,
+    XrayAssetDownloadManager,
     XrayAssetSHA256DownloadManager,
 )
 
-from PySide6 import QtCore
+from PySide6 import QtCore, QtNetwork
+
+from shiboken6 import isValid
 
 from unittest import TestCase, mock
 
@@ -30,8 +33,10 @@ import os
 import hashlib
 import unittest
 import tempfile
+import threading
+import weakref
 
-from tests.support import application, processQtEvents
+from tests.support import application, processQtEvents, waitFor
 
 
 class _Reply:
@@ -44,6 +49,21 @@ class _Reply:
         return self._data
 
 
+class _PendingReply(QtNetwork.QNetworkReply):
+    """Exercise real reply signals without opening a network connection."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.abortCount = 0
+
+    def abort(self):
+        self.abortCount += 1
+        self.setError(self.NetworkError.OperationCanceledError, 'cancelled by test')
+        self.setFinished(True)
+
+        self.finished.emit()
+
+
 class XrayAssetDownloadTest(TestCase):
     """Verify checksum metadata and downloaded bytes before replacement."""
 
@@ -53,6 +73,179 @@ class XrayAssetDownloadTest(TestCase):
 
     def tearDown(self):
         processQtEvents()
+
+    def testPluginShutdownReleasesAssetClientsAndPendingHashes(self):
+        """Plugin shutdown must reach the clients acquired after connection."""
+        from Furious.Backends.Xray.Plugin import XrayPlugin, XrayCoreRuntimeFactory
+
+        plugin = XrayPlugin()
+        factory = next(
+            item
+            for item in plugin.capabilities
+            if isinstance(item, XrayCoreRuntimeFactory)
+        )
+        manager = XrayAssetDownloadManager()
+        factory._assetDownloadManager = manager
+
+        clients = [
+            client
+            for helper in (manager.downloadHelperGeosite, manager.downloadHelperGeoip)
+            for client in (helper.sha256Downloader, helper.assetsDownloader)
+        ]
+        download = mock.Mock()
+        pool = mock.Mock()
+
+        with mock.patch(
+            'Furious.Backends.Xray.AssetDownloadManager.AppThreadPool',
+            return_value=pool,
+        ):
+            clients[0].successCallback(
+                _Reply(hashlib.sha256(b'new asset').hexdigest().encode()),
+                filepath='missing-asset.dat',
+                downloadCallback=download,
+            )
+
+        replies = []
+
+        for client in clients:
+            reply = _PendingReply(client)
+            replies.append(reply)
+
+            with mock.patch.object(client, 'get', return_value=reply):
+                client.webGET('https://example.invalid/asset', logActionMessage=False)
+
+        worker = pool.start.call_args.args[0]
+
+        try:
+            plugin.shutdown()
+            plugin.shutdown()
+
+            worker.run()
+            processQtEvents()
+
+            download.assert_not_called()
+            self.assertTrue(all(not isValid(client) for client in clients))
+            self.assertEqual([reply.abortCount for reply in replies], [1] * 4)
+            self.assertTrue(all(not isValid(reply) for reply in replies))
+        finally:
+            for client in clients:
+                if isValid(client):
+                    client.deleteLater()
+
+            processQtEvents()
+
+    def testPoolHashResultsReturnToOwnerThreadAndReleaseJobs(self):
+        """Real pool execution crosses back to Qt before invoking callbacks."""
+        manager = XrayAssetSHA256DownloadManager()
+        pool = QtCore.QThreadPool()
+        deliveries = []
+        expected = hashlib.sha256(b'new asset').hexdigest()
+
+        try:
+            with mock.patch(
+                'Furious.Backends.Xray.AssetDownloadManager.AppThreadPool',
+                return_value=pool,
+            ):
+                for _ in range(30):
+                    manager.successCallback(
+                        _Reply(expected.encode()),
+                        filepath='missing-asset.dat',
+                        downloadCallback=lambda digest: deliveries.append(
+                            (digest, QtCore.QThread.currentThread())
+                        ),
+                    )
+
+            self.assertTrue(waitFor(lambda: len(deliveries) == 30))
+            self.assertEqual(deliveries, [(expected, manager.thread())] * 30)
+            self.assertEqual(manager._hashJobs, {})
+        finally:
+            self.assertTrue(pool.waitForDone(3000))
+            manager.deleteLater()
+            pool.deleteLater()
+            processQtEvents()
+
+    def testRunningHashDoesNotRetainCallbackAfterOwnerDestruction(self):
+        """A blocked real worker owns bytes, not a destroyed owner's callback."""
+        manager = XrayAssetSHA256DownloadManager()
+        pool = QtCore.QThreadPool()
+        entered = threading.Event()
+        release = threading.Event()
+        digestFunction = hashlib.sha256
+        download = mock.Mock()
+        callbackReference = weakref.ref(download)
+        expected = digestFunction(b'new asset').hexdigest()
+
+        def compute(data):
+            entered.set()
+
+            if not release.wait(3):
+                raise RuntimeError('test hash was not released')
+
+            return digestFunction(data)
+
+        try:
+            with (
+                mock.patch(
+                    'Furious.Backends.Xray.AssetDownloadManager.AppThreadPool',
+                    return_value=pool,
+                ),
+                mock.patch(
+                    'Furious.Backends.Xray.AssetDownloadManager.hashlib.sha256',
+                    side_effect=compute,
+                ),
+            ):
+                manager.successCallback(
+                    _Reply(expected.encode()),
+                    filepath='missing-asset.dat',
+                    downloadCallback=download,
+                )
+                del download
+
+                self.assertTrue(entered.wait(3))
+
+                manager.deleteLater()
+                processQtEvents()
+
+                self.assertIsNone(callbackReference())
+
+                release.set()
+                self.assertTrue(pool.waitForDone(3000))
+                processQtEvents()
+        finally:
+            release.set()
+            self.assertTrue(pool.waitForDone(3000))
+
+            if isValid(manager):
+                manager.deleteLater()
+            pool.deleteLater()
+            processQtEvents()
+
+    def testHashCompletionCannotOutliveDownloadManager(self):
+        """A queued hash must not start downloads after its Qt owner dies."""
+        manager = XrayAssetSHA256DownloadManager()
+        download = mock.Mock()
+        pool = mock.Mock()
+
+        with mock.patch(
+            'Furious.Backends.Xray.AssetDownloadManager.AppThreadPool',
+            return_value=pool,
+        ):
+            manager.successCallback(
+                _Reply(hashlib.sha256(b'new asset').hexdigest().encode()),
+                filepath='missing-asset.dat',
+                downloadCallback=download,
+            )
+
+        worker = pool.start.call_args.args[0]
+
+        manager.deleteLater()
+        processQtEvents()
+
+        worker.run()
+        processQtEvents()
+        manager.shutdown()
+
+        download.assert_not_called()
 
     def testMalformedChecksumDoesNotStartHashOrAssetDownload(self):
         manager = XrayAssetSHA256DownloadManager()
@@ -98,6 +291,8 @@ class XrayAssetDownloadTest(TestCase):
                 filepath=existing.name,
                 downloadCallback=download,
             )
+
+        processQtEvents()
 
         download.assert_called_once_with(expectedDigest)
         manager.deleteLater()

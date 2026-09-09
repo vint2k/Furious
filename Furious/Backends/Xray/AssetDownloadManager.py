@@ -24,6 +24,8 @@ from Furious.Qt import *
 
 from PySide6 import QtCore
 
+from shiboken6 import isValid
+
 from typing import AnyStr, Union, Callable
 
 import os
@@ -31,31 +33,76 @@ import re
 import logging
 import hashlib
 import functools
+import weakref
 
 __all__ = ['XrayAssetDownloadManager']
 
 logger = logging.getLogger(__name__)
 
 
-class SHA256Worker(QtCore.QObject, QtCore.QRunnable):
-    """Run SHA-256 work in the background."""
+class _SHA256ResultEvent(QtCore.QEvent):
+    """Deliver one immutable hash result to the manager's Qt thread."""
 
-    finished = QtCore.Signal(str)
+    Type = QtCore.QEvent.Type(QtCore.QEvent.registerEventType())
 
-    def __init__(self, string=b''):
-        # Explictly called __init__
-        """Initialize the SHA256Worker."""
-        QtCore.QObject.__init__(self)
-        QtCore.QRunnable.__init__(self)
+    def __init__(self, token, digest):
+        super().__init__(self.Type)
 
-        self.string = string
+        self.token = token
+        self.digest = digest
+
+
+class SHA256Worker(QtCore.QRunnable):
+    """Hash copied bytes without owning Qt objects or download callbacks."""
+
+    def __init__(self, receiver, token, data):
+        super().__init__()
+
+        self._receiver = weakref.ref(receiver)
+        self._token = token
+        self._data = data
 
     def run(self):
-        """Run the SHA-256 worker task."""
-        self.finished.emit(hashlib.sha256(self.string).hexdigest())
+        """Post a result only while its manager still has a native Qt object."""
+        digest = hashlib.sha256(self._data).hexdigest()
+
+        receiver = self._receiver()
+
+        if receiver is not None and isValid(receiver):
+            try:
+                QtCore.QCoreApplication.postEvent(
+                    receiver, _SHA256ResultEvent(self._token, digest)
+                )
+            except RuntimeError:
+                # Native destruction can race the validity check on this thread.
+                pass
 
 
-class XrayAssetSHA256DownloadManager(HttpGetManager):
+class _AssetDownloadClient(HttpGetManager):
+    """Own asset requests until the plugin closes this client."""
+
+    def __init__(self, parent=None, **kwargs):
+        super().__init__(parent, **kwargs)
+        self._closed = False
+
+    def shutdown(self):
+        """Reject late success and abort this client's exact pending replies."""
+        if self._closed:
+            return
+
+        self._closed = True
+
+        for reply in tuple(self._replyContexts):
+            if isValid(reply) and not reply.isFinished():
+                reply.abort()
+
+        self._replyContexts.clear()
+
+        if isValid(self):
+            self.deleteLater()
+
+
+class XrayAssetSHA256DownloadManager(_AssetDownloadClient):
     """Coordinate Xray asset SHA-256 download operations."""
 
     def __init__(self, parent=None, **kwargs):
@@ -63,6 +110,17 @@ class XrayAssetSHA256DownloadManager(HttpGetManager):
         actionMessage = kwargs.pop('actionMessage', 'download sha256')
 
         super().__init__(parent, actionMessage=actionMessage)
+
+        self._hashJobs = {}
+
+        # A surviving Python wrapper must not retain callbacks after Qt teardown.
+        self.destroyed.connect(self._hashJobs.clear)
+
+    def shutdown(self):
+        """Discard hash callback contexts before aborting metadata requests."""
+        self._hashJobs.clear()
+
+        super().shutdown()
 
     @staticmethod
     def fileContent(filepath, mode='rb') -> AnyStr:
@@ -92,6 +150,9 @@ class XrayAssetSHA256DownloadManager(HttpGetManager):
 
     def successCallback(self, networkReply, **kwargs):
         """Handle a successful network operation."""
+        if self._closed:
+            return
+
         filepath = kwargs.pop('filepath', '')
         downloadCallback = kwargs.pop('downloadCallback', None)
 
@@ -107,29 +168,51 @@ class XrayAssetSHA256DownloadManager(HttpGetManager):
 
             return
 
-        def handleFinished(_digest, _value=''):
-            """Handle finished."""
-            logger.debug(
-                f'computed digest is \'{_digest}\' while repo digest is \'{_value}\''
-            )
+        token = object()
+        worker = SHA256Worker(self, token, self.fileContent(filepath))
 
-            if _digest != _value:
-                logger.info(f'digest not equal for {basename}. Start downloading asset')
+        self._hashJobs[token] = (basename, value, downloadCallback)
 
-                if callable(downloadCallback):
-                    downloadCallback(_value)
-            else:
-                logger.info(f'digest equal for {basename}. Nothing to do')
+        try:
+            AppThreadPool().start(worker)
+        except Exception:
+            # Any non-exit exceptions
 
-        worker = SHA256Worker(self.fileContent(filepath))
+            self._hashJobs.pop(token, None)
 
-        worker.setAutoDelete(True)
-        worker.finished.connect(functools.partial(handleFinished, _value=value))
+            raise
 
-        AppThreadPool().start(worker)
+    def event(self, event):
+        """Consume hash jobs exactly once, in the downloader's owning thread."""
+        if event.type() != _SHA256ResultEvent.Type:
+            return super().event(event)
+
+        context = self._hashJobs.pop(event.token, None)
+
+        if context is None:
+            return True
+
+        basename, expectedDigest, downloadCallback = context
+
+        logger.debug(
+            f'computed digest is {event.digest!r} while repo digest is {expectedDigest!r}'
+        )
+
+        if event.digest != expectedDigest:
+            logger.info(f'digest not equal for {basename}. Start downloading asset')
+
+            if callable(downloadCallback):
+                downloadCallback(expectedDigest)
+        else:
+            logger.info(f'digest equal for {basename}. Nothing to do')
+
+        return True
 
     def download(self, url, filepath, downloadCallback: Callable[[str], None]):
         """Download the Xray asset SHA-256 download manager."""
+        if self._closed:
+            return
+
         self.webGET(
             url,
             filepath=str(filepath),
@@ -137,7 +220,7 @@ class XrayAssetSHA256DownloadManager(HttpGetManager):
         )
 
 
-class XrayAssetAssetsDownloadManager(HttpGetManager):
+class XrayAssetAssetsDownloadManager(_AssetDownloadClient):
     """Coordinate Xray asset assets download operations."""
 
     def __init__(self, parent=None, **kwargs):
@@ -148,6 +231,9 @@ class XrayAssetAssetsDownloadManager(HttpGetManager):
 
     def successCallback(self, networkReply, **kwargs):
         """Handle a successful network operation."""
+        if self._closed:
+            return
+
         filepath = kwargs.pop('filepath', '')
         expectedDigest = str(kwargs.pop('expectedDigest', '')).lower()
 
@@ -191,6 +277,9 @@ class XrayAssetAssetsDownloadManager(HttpGetManager):
 
     def download(self, url, filepath, expectedDigest: str):
         """Download the Xray asset assets download manager."""
+        if self._closed:
+            return
+
         self.webGET(
             url,
             filepath=str(filepath),
@@ -214,6 +303,11 @@ class XrayAssetPairDownloadHelper:
         self.assetsDownloader = XrayAssetAssetsDownloadManager(
             actionMessage=assetsActionMessage
         )
+
+    def shutdown(self):
+        """Close both stages of this asset update."""
+        self.sha256Downloader.shutdown()
+        self.assetsDownloader.shutdown()
 
     def configureHttpProxy(self, httpProxy: Union[str, None]) -> bool:
         """Configure HTTP proxy."""
@@ -250,6 +344,11 @@ class XrayAssetDownloadManager:
             sha256ActionMessage='download geoip sha256',
             assetsActionMessage='download geoip assets',
         )
+
+    def shutdown(self):
+        """Release every client acquired by the plugin's asset updater."""
+        self.downloadHelperGeosite.shutdown()
+        self.downloadHelperGeoip.shutdown()
 
     def configureHttpProxy(self, httpProxy: Union[str, None]) -> bool:
         """Configure HTTP proxy."""

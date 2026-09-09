@@ -200,3 +200,21 @@ started for the smoke test.
   at diagnostic batch boundaries, never once per UI operation.
 - A lifetime failure must be investigated as an ownership defect; increasing
   thresholds or forcing production garbage collection is not an acceptable fix.
+
+### Focused lifetime audit regressions
+
+`test_qt_lifetime.py` checks that independent signal endpoints do not accumulate
+cleanup hooks when senders die first and releases message-box masks on native deletion.
+`test_theme_transition.py` covers both target-window and coordinator destruction during a fade. `test_connection_startup_async.py` covers DNS
+cancellation/timeout with already-deleted recursive replies. `test_service_runtime.py`
+rejects deleted plugin-page wrappers. `test_xray_asset_download.py` exercises real
+pool-thread delivery, early manager destruction, callback release, and plugin shutdown
+of pending replies and hashes.
+
+Run `python -m tests.fixtures.editor_lifetime_probe --iterations 100 --pattern representative --close-method close`
+natively and compile that fixture with Nuitka's PySide6 plugin for a separate standalone
+check. It checks both independent signal endpoint destruction orders as well as seven
+transient editor families. Repeat with `--close-method accept` and `--close-method reject`.
+A null protected-list count means Nuitka does not expose that diagnostic; inspect its
+installed package configuration and require zero live wrappers and registry entries
+instead.
