@@ -268,7 +268,7 @@ def controlStyleSheet(
             }}
 
             QPushButton#SearchButton {{
-                padding: 0;
+                padding: 3px 0;
             }}
 
             QToolButton:hover {{
