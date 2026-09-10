@@ -89,7 +89,7 @@ jobs:
             windows-compatibility: ""
             windows-architecture: ""
     env:
-      GO_WIN7_VERSION: "1.26.7"
+      GO_WIN7_VERSION: "1.27.1"
       WIX_VERSION: "6.0.2"
       WIX_INSTALLER_SHA256: "A8A5CC7443353CEF3AB900C60CD7A3A5EE601746319D104AC7B12AD0CED2345C"
     steps:
@@ -374,7 +374,7 @@ jobs:
       - name: Set up Go for Windows10
         uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          go-version: "1.27"
           check-latest: true
           cache: false
         if: matrix.id == 'windows10-amd64'
